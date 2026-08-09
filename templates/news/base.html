@@ -66,8 +66,10 @@
       <p class="footer-links">
         <a href="{% url 'news:about' %}">Editorial policy</a>
         <a href="{% url 'news:feed' %}">RSS</a>
-        <a href="{% url 'news:status' %}">Pipeline status</a>
-        {% if user.is_staff %}<a href="{% url 'news:desk' %}">Desk</a>{% endif %}
+        {% if user.is_staff %}
+          <a href="{% url 'news:desk' %}">Desk</a>
+          <a href="{% url 'news:status' %}">Pipeline status</a>
+        {% endif %}
       </p>
     </div>
   </footer>

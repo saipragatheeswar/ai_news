@@ -402,9 +402,19 @@ class ViewTests(TestCase):
         self.assertEqual(self.client.get("/feed/").status_code, 200)
         self.assertEqual(self.client.get("/sitemap.xml").status_code, 200)
 
-    def test_policy_and_status_pages_render(self):
+    def test_policy_page_renders(self):
         self.assertEqual(self.client.get("/about/").status_code, 200)
+
+    def test_status_page_requires_staff(self):
+        self.assertEqual(self.client.get("/status/").status_code, 302)
+        User.objects.create_user("ed", password="pw12345!", is_staff=True)
+        self.client.login(username="ed", password="pw12345!")
         self.assertEqual(self.client.get("/status/").status_code, 200)
+
+    def test_public_home_hides_staff_links(self):
+        response = self.client.get("/")
+        self.assertNotContains(response, "Pipeline status")
+        self.assertNotContains(response, ">Desk</a>")
 
 
 class JsonRecoveryTests(TestCase):

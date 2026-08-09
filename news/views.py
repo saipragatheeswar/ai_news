@@ -223,8 +223,9 @@ def desk_action(request, slug):
     return redirect(request.POST.get("next") or "news:desk")
 
 
+@staff_member_required
 def pipeline_status(request):
-    """Lightweight operational view of recent runs."""
+    """Operational view of recent runs — staff only."""
     return render(
         request,
         "news/status.html",
