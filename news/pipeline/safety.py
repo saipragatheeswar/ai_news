@@ -131,6 +131,21 @@ PII_PATTERNS = [
 
 # Case matters here: "I" and "us" must stay capital-sensitive so the country
 # abbreviation "US" and the pronoun "I" are not confused with each other.
+# A headline with no specific subject means the model was fed a roundup and had
+# nothing coherent to report. Publishing it would be worse than skipping.
+GENERIC_HEADLINE_PATTERNS = [
+    r"^news\b",
+    r"^(?:world|global|international|local|national|daily|latest|breaking|general)\s+news\b",
+    r"\bnews (?:from|around|of) the (?:world|globe|day)\b",
+    r"^top stories\b",
+    r"^(?:today'?s|daily|weekly)\s+(?:news|update|briefing|roundup|digest)\b",
+    r"^news (?:roundup|update|digest|briefing|summary)\b",
+    r"^(?:update|summary|report|overview|untitled)\b\s*$",
+    r"^various\b",
+    r"^multiple\b",
+    r"\bassorted (?:news|stories|updates)\b",
+]
+
 FIRST_PERSON_PATTERNS = [
     r"\bI\b",
     r"\bI'(?:m|ve|ll|d)\b",
@@ -246,6 +261,18 @@ def check_rules(
     if source_count == 0:
         report.issues.append(
             SafetyIssue("no_sources", Verdict.BLOCK, "no sources recorded for topic")
+        )
+
+    normalised_title = " ".join(title.split()).strip().lower()
+    if any(
+        re.search(pattern, normalised_title) for pattern in GENERIC_HEADLINE_PATTERNS
+    ):
+        report.issues.append(
+            SafetyIssue(
+                "generic_headline",
+                Verdict.BLOCK,
+                f"headline names no specific subject: {title[:80]!r}",
+            )
         )
 
     first_person = [p for p in FIRST_PERSON_PATTERNS if re.search(p, body)]

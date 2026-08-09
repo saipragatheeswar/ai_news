@@ -205,37 +205,48 @@ SCHEDULE_HOUR = env_int("SCHEDULE_HOUR", 6)
 SCHEDULE_MINUTE = env_int("SCHEDULE_MINUTE", 30)
 
 # Seed queries per category used to discover what is trending today.
+#
+# These deliberately name *subjects* rather than asking for "top news today".
+# Meta queries rank roundups, live blogs and section fronts, because those pages
+# are built to rank for that phrasing. Subject queries return the individual
+# articles we actually want to write about.
 NEWS_CATEGORY_QUERIES = {
     "world": [
-        "top world news today",
-        "breaking international news today",
+        "government announcement international",
+        "armed conflict latest developments",
+        "national election result",
     ],
     "india": [
-        "top India news today",
-        "India breaking news headlines today",
+        "Indian government policy decision",
+        "India Supreme Court ruling",
+        "Indian state politics development",
     ],
     "business": [
-        "top business and markets news today",
-        "stock market top story today",
+        "company quarterly earnings results",
+        "central bank interest rate decision",
+        "merger acquisition deal announced",
     ],
     "technology": [
-        "biggest technology news today",
-        "artificial intelligence news today",
+        "artificial intelligence company launch",
+        "technology product release announced",
+        "data breach security incident",
     ],
     "sports": [
-        "top sports news today",
-        "cricket news today",
-        "football transfer news today",
+        "cricket match result",
+        "football match report",
+        "athletics championship result",
     ],
     "entertainment": [
-        "top entertainment news today",
-        "movie industry news today",
+        "film box office collection",
+        "movie release announcement",
+        "music album release",
     ],
     "rumours": [
-        "trending rumours reported today",
-        "unconfirmed reports trending today",
+        "transfer rumours reported sources",
+        "unconfirmed report claims sources say",
     ],
     "science": [
-        "science and health news today",
+        "medical research study findings",
+        "space mission launch",
     ],
 }

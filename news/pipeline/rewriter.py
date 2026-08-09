@@ -186,7 +186,7 @@ def write_article(
     return Draft(title=title, summary=summary, body=body, attempts=attempt)
 
 
-def _render_sources(sources: list[Source], budget: int = 9000) -> str:
+def _render_sources(sources: list[Source], budget: int = 4500) -> str:
     per_source = max(budget // max(len(sources), 1), 700)
     blocks = []
     for index, source in enumerate(sources, start=1):

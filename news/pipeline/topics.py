@@ -30,6 +30,73 @@ _OUTLET_SUFFIX = re.compile(
     r"\s+[-|–—]\s+[A-Z][A-Za-z0-9.&'’ ]{2,40}$"
 )
 
+# Broad queries like "top news today" rank index and roundup pages above real
+# stories, because those pages are built to rank for exactly that phrase. A
+# roundup has no single subject, so there is nothing coherent to report; these
+# patterns drop them before they can become topics.
+_NON_STORY_PATTERNS = [
+    # Roundups, digests and section fronts
+    r"\bnews headlines?\b",
+    r"\bheadlines?\s+(?:for|of|today|this)\b",
+    r"\btop\s+(?:news|stories|headlines)\b",
+    r"\blatest news\b",
+    r"\bnews bulletin\b",
+    r"\bnews (?:roundup|round-up|wrap|wrap-?up|digest|briefing|recap)\b",
+    r"\b(?:morning|evening|daily|weekly|weekend) (?:briefing|digest|wrap|roundup|recap)\b",
+    r"\bnews today\b",
+    r"\btoday'?s (?:news|headlines|top stories|papers)\b",
+    r"\bthis week in\b",
+    r"\bwhat to know\b",
+    r"\bkey (?:takeaways|points)\b",
+    # Live blogs and rolling coverage
+    r"\blive (?:updates?|coverage|blog|news|stream|scores?)\b",
+    r"\bbreaking updates?\b",
+    r"\bas it happened\b",
+    r"\bminute[- ]by[- ]minute\b",
+    # Media galleries rather than reporting
+    r"^video[.:\s]",
+    r"^watch[:\s]",
+    r"^photos?[:\s]",
+    r"\blicensable picture\b",
+    r"\bphoto (?:gallery|essay)\b",
+    r"\bin (?:pictures|photos)\b",
+    r"\bpodcast\b",
+    # Recurring data pages, not events
+    r"\bstock market news\b",
+    r"\bmarket (?:wrap|close|open|update|report)\b",
+    r"\bnyse\b.*\bnasdaq\b",
+    r"\bpoints table\b",
+    r"\bfull (?:schedule|fixtures|results)\b",
+    r"\bweather (?:forecast|update|report)\b",
+    r"\bhoroscope\b",
+    r"\bgold (?:rate|price) today\b",
+    r"\bpetrol (?:and diesel )?price\b",
+    # Listicles and evergreen features
+    r"^\s*\d{1,2}\s+\S+",
+    r"\bbest[- ]performing\b",
+    r"\btop\s+\d{1,2}\b",
+    r"\branked\b",
+    r"\bexplained\b",
+    r"\bopinion[:\s]",
+    r"\banalysis[:\s]",
+    r"\breview[:\s]",
+]
+
+# A trailing date is the signature of a dated index page.
+_DATE_SUFFIX = re.compile(
+    r"(?:\||[-–—:])\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+"
+    r"\d{1,2}(?:st|nd|rd|th)?,?\s*\d{4}\s*$",
+    re.IGNORECASE,
+)
+
+
+def is_story_headline(title: str) -> bool:
+    """True when a headline looks like one specific event rather than an index."""
+    if _DATE_SUFFIX.search(title):
+        return False
+    lowered = title.lower()
+    return not any(re.search(p, lowered) for p in _NON_STORY_PATTERNS)
+
 
 @dataclass
 class TopicCluster:
@@ -107,7 +174,10 @@ def cluster_hits(
     for category_slug, hits in hits_by_category.items():
         for hit in sorted(hits, key=lambda h: h.score, reverse=True):
             headline = clean_headline(hit.title)
-            if len(headline) < 15:
+            if len(headline) < 25:
+                continue
+            if not is_story_headline(headline):
+                logger.debug("dropping non-story headline: %s", headline)
                 continue
             words = keywords_of(headline)
             if len(words) < 3:

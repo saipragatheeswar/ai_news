@@ -149,6 +149,27 @@ class SafetyRuleTests(TestCase):
         report = self.check("Anything", self.body, sources=0)
         self.assertEqual(report.verdict, safety.Verdict.BLOCK)
 
+    def test_generic_headline_is_blocked(self):
+        for title in [
+            "News from Around the World",
+            "World News",
+            "Today's News Update",
+            "Top Stories",
+            "News Roundup",
+        ]:
+            report = self.check(title, self.body)
+            self.assertEqual(
+                report.verdict, safety.Verdict.BLOCK, f"should block: {title}"
+            )
+            self.assertIn("generic_headline", [i.code for i in report.issues])
+
+    def test_specific_headline_is_allowed(self):
+        report = self.check(
+            "Transport department opens new bus corridor between districts",
+            self.body,
+        )
+        self.assertEqual(report.verdict, safety.Verdict.PASS, report.summary)
+
     def test_short_body_holds_for_review(self):
         report = safety.check_rules(
             "Corridor opens", self.body, category_slug="world", source_count=3
@@ -209,6 +230,57 @@ class ClusteringTests(TestCase):
         biggest = max(clusters, key=lambda c: len(c.hits))
         self.assertEqual(len(biggest.hits), 2)
         self.assertEqual(len(biggest.domains), 2)
+
+    def test_roundup_and_index_headlines_are_rejected(self):
+        for headline in [
+            "Video. Latest news bulletin | August 9th, 2026",
+            "Today News Headlines for School Assembly, August 3, 2026",
+            "Stock Market News Today - NYSE, NASDAQ & OTC Headlines",
+            "Ukraine News Today: Breaking Updates & Live Coverage",
+            "Licensable picture: World News - August 6, 2026",
+            "5 Box Office Bombs From The '70s That Changed Hollywood",
+            "The Best-Performing Stocks in 2026 By One-Year Returns",
+            "Top 10 gadgets you can buy this year",
+            "Morning briefing: what to know before the bell",
+            "IPL 2026 points table and full schedule",
+        ]:
+            self.assertFalse(
+                topics.is_story_headline(headline), f"should reject: {headline}"
+            )
+
+    def test_real_story_headlines_are_kept(self):
+        for headline in [
+            "US President Trump warns Iran's power plants will be destroyed",
+            "Man City eye Chelsea winger Pedro Neto in January window",
+            "OpenAI acquires startup that builds presentation software",
+            "Korea's film industry grapples over six-month holdback rule",
+            "Central bank raises benchmark rate by quarter point",
+            "Floods displace thousands across two coastal districts",
+        ]:
+            self.assertTrue(
+                topics.is_story_headline(headline), f"should keep: {headline}"
+            )
+
+    def test_non_story_headlines_never_become_clusters(self):
+        from news.pipeline.tavily_client import SearchHit
+
+        hits = [
+            SearchHit(
+                title="Video. Latest news bulletin | August 9th, 2026",
+                url="https://example.com/a",
+                content="",
+                score=0.99,
+            ),
+            SearchHit(
+                title="Central bank raises benchmark rate by quarter point",
+                url="https://example.com/b",
+                content="",
+                score=0.5,
+            ),
+        ]
+        clusters = topics.cluster_hits({"world": hits})
+        self.assertEqual(len(clusters), 1)
+        self.assertIn("Central bank", clusters[0].label)
 
     def test_outlet_suffix_is_stripped(self):
         self.assertEqual(
