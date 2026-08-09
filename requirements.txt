@@ -1,0 +1,6 @@
+Django==6.1
+tavily-python==0.7.27
+requests==2.34.2
+python-dotenv==1.2.2
+python-slugify==8.0.4
+APScheduler==3.11.3

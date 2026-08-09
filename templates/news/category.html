@@ -1,0 +1,21 @@
+{% extends "news/base.html" %}
+
+{% block title %}{{ category.name }} - {{ site_name }}{% endblock %}
+{% block description %}Latest {{ category.name }} stories on {{ site_name }}.{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1>{{ category.name }}</h1>
+    {% if category.description %}<p>{{ category.description }}</p>{% endif %}
+  </div>
+
+  <div class="grid">
+    {% for article in articles %}
+      {% include "news/_card.html" %}
+    {% empty %}
+      <div class="empty"><h2>Nothing here yet</h2><p>No published stories in this section.</p></div>
+    {% endfor %}
+  </div>
+
+  {% include "news/_pagination.html" %}
+{% endblock %}

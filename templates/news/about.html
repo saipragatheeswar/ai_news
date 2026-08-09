@@ -1,0 +1,69 @@
+{% extends "news/base.html" %}
+
+{% block title %}How this works - {{ site_name }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1>How {{ site_name }} works</h1>
+    <p>Our editorial policy, in plain language.</p>
+  </div>
+
+  <div class="prose">
+    <h2>Where the stories come from</h2>
+    <p>
+      Each day we search the web for the stories that multiple independent
+      outlets are covering. A story that several unrelated newsrooms report on
+      the same day is treated as a hot topic. We aim to publish
+      {{ daily_target }} stories a day across world news, India, business,
+      technology, sports, entertainment, science and clearly-labelled
+      unconfirmed reports.
+    </p>
+
+    <h2>How the writing works</h2>
+    <p>
+      We do not republish other people's articles. Instead, a local language
+      model ({{ model_name }}) first reads the coverage and reduces it to a list
+      of bare facts. It then writes our article from that fact list alone,
+      without access to the original wording. Facts are not copyrightable;
+      the phrasing used to express them is, so we never carry it over.
+    </p>
+    <p>
+      Every draft is measured against the sources it came from. If more than
+      {{ max_overlap|floatformat:"-1" }} of its five-word sequences match a source, or if any
+      verbatim run is too long, the draft is thrown away and rewritten from
+      scratch. Direct quotations are converted into indirect speech.
+    </p>
+
+    <h2>What we will not publish</h2>
+    <ul>
+      <li>Sexual, adult or graphic content. This is a general-audience site.</li>
+      <li>
+        Any claim that a named person or company committed a crime or
+        misconduct, unless the article attributes the claim to a court,
+        regulator, investigation or official statement. Unattributed
+        accusations are blocked automatically and never reach the site.
+      </li>
+      <li>Rumours presented as fact. Unconfirmed reports are labelled as such,
+        need corroboration from more than one outlet, and are hedged throughout.</li>
+      <li>Hate speech, harassment or demeaning generalisations about any group.</li>
+      <li>Private contact details, ID numbers or payment information.</li>
+      <li>Dangerous instructions, or medical and financial advice stated as certainty.</li>
+    </ul>
+
+    <h2>Human oversight</h2>
+    <p>
+      Automated checks decide what is safe enough to publish
+      {% if auto_publish %}automatically{% else %}, and a person approves every story before it goes live{% endif %}.
+      Anything that trips a check is held in a review queue for a human editor
+      rather than being published. Rejected drafts are kept internally so
+      decisions can be audited.
+    </p>
+
+    <h2>Corrections</h2>
+    <p>
+      We summarise other people's reporting, so errors can propagate. If you
+      believe a story is wrong, unfair, or that we have overstepped on your
+      copyright, tell us and we will correct or remove it.
+    </p>
+  </div>
+{% endblock %}

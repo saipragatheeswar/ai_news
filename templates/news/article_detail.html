@@ -1,0 +1,60 @@
+{% extends "news/base.html" %}
+
+{% block title %}{{ article.title }} - {{ site_name }}{% endblock %}
+{% block description %}{{ article.summary }}{% endblock %}
+
+{% block content %}
+  {% if not article.is_live %}
+    <div class="banner">
+      Preview only - this story is <strong>{{ article.get_status_display }}</strong> and is not
+      publicly visible.
+      {% if article.review_notes %}<br><span class="banner-notes">{{ article.review_notes|linebreaksbr }}</span>{% endif %}
+    </div>
+  {% endif %}
+
+  <article class="story">
+    <a class="card-cat" href="{{ article.category.get_absolute_url }}">{{ article.category.name }}</a>
+    <h1>{{ article.title }}</h1>
+    <p class="story-summary">{{ article.summary }}</p>
+    <div class="story-meta">
+      {% if article.published_at %}
+        <time datetime="{{ article.published_at|date:'c' }}">{{ article.published_at|date:"j M Y, H:i" }}</time>
+      {% endif %}
+      <span>{{ article.word_count }} words</span>
+      <span>Written by a local language model, checked before publishing</span>
+    </div>
+
+    <div class="story-body">
+      {% for paragraph in article.paragraphs %}<p>{{ paragraph }}</p>{% endfor %}
+    </div>
+
+    {% if article.attributions.all %}
+      <section class="sources">
+        <h2>Reporting this summary is based on</h2>
+        <p class="sources-note">
+          This article was written independently from the facts reported below.
+          Follow the links for the original reporting.
+        </p>
+        <ul>
+          {% for attribution in article.attributions.all %}
+            <li>
+              <a href="{{ attribution.url }}" rel="nofollow noopener" target="_blank">
+                {{ attribution.title|default:attribution.url }}
+              </a>
+              {% if attribution.domain %}<span class="domain">{{ attribution.domain }}</span>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+  </article>
+
+  {% if related %}
+    <section class="related">
+      <h2>More in {{ article.category.name }}</h2>
+      <div class="grid">
+        {% for article in related %}{% include "news/_card.html" %}{% endfor %}
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

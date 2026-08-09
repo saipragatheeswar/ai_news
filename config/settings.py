@@ -1,0 +1,241 @@
+"""Django settings for the AI news publisher."""
+
+from pathlib import Path
+
+from dotenv import load_dotenv
+import os
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+load_dotenv(BASE_DIR / ".env")
+
+
+def env_str(name: str, default: str = "") -> str:
+    value = os.environ.get(name)
+    return default if value is None or value == "" else value
+
+
+def env_int(name: str, default: int) -> int:
+    try:
+        return int(env_str(name, str(default)))
+    except ValueError:
+        return default
+
+
+def env_float(name: str, default: float) -> float:
+    try:
+        return float(env_str(name, str(default)))
+    except ValueError:
+        return default
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    return env_str(name, "1" if default else "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def env_list(name: str, default: str = "") -> list[str]:
+    return [item.strip() for item in env_str(name, default).split(",") if item.strip()]
+
+
+SECRET_KEY = env_str(
+    "DJANGO_SECRET_KEY",
+    "django-insecure-change-me-before-deploying-to-production-0000000",
+)
+
+DEBUG = env_bool("DJANGO_DEBUG", True)
+
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]")
+
+CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+
+INSTALLED_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "django.contrib.sitemaps",
+    "news",
+]
+
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+ROOT_URLCONF = "config.urls"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+                "news.context_processors.site_settings",
+            ],
+        },
+    },
+]
+
+WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+        "OPTIONS": {
+            "timeout": 30,
+            "transaction_mode": "IMMEDIATE",
+            "init_command": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;",
+        },
+    }
+}
+
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+    },
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
+
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = env_str("DJANGO_TIME_ZONE", "Asia/Kolkata")
+USE_I18N = True
+USE_TZ = True
+
+STATIC_URL = "static/"
+STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {"format": "{asctime} {levelname} {name} {message}", "style": "{"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "verbose"},
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "pipeline.log",
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 3,
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        "news": {
+            "handlers": ["console", "file"],
+            "level": env_str("LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+    },
+}
+
+(BASE_DIR / "logs").mkdir(exist_ok=True)
+
+
+# --- Publication identity -------------------------------------------------
+
+SITE_NAME = env_str("SITE_NAME", "PulseWire")
+SITE_TAGLINE = env_str("SITE_TAGLINE", "Today's hot topics, responsibly summarised")
+SITE_BASE_URL = env_str("SITE_BASE_URL", "http://127.0.0.1:8000")
+
+
+# --- Content pipeline -----------------------------------------------------
+
+TAVILY_API_KEY = env_str("TAVILY_API_KEY")
+
+# Ollama runs the local rewrite model. Keep the model under 4 GB.
+OLLAMA_BASE_URL = env_str("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+OLLAMA_MODEL = env_str("OLLAMA_MODEL", "llama3.2:latest")
+OLLAMA_TIMEOUT = env_int("OLLAMA_TIMEOUT", 300)
+OLLAMA_NUM_CTX = env_int("OLLAMA_NUM_CTX", 8192)
+
+# How many articles a single daily run should publish.
+DAILY_ARTICLE_TARGET = env_int("DAILY_ARTICLE_TARGET", 20)
+
+# Topic discovery breadth: candidates gathered before ranking.
+TOPIC_CANDIDATE_POOL = env_int("TOPIC_CANDIDATE_POOL", 60)
+
+# Number of independent sources we try to gather per topic before writing.
+SOURCES_PER_TOPIC = env_int("SOURCES_PER_TOPIC", 5)
+
+# Minimum sources required before a rumour-style story may be written at all.
+MIN_SOURCES_FOR_RUMOUR = env_int("MIN_SOURCES_FOR_RUMOUR", 2)
+
+# Originality gate: reject drafts that reuse too much source wording.
+MAX_NGRAM_OVERLAP = env_float("MAX_NGRAM_OVERLAP", 0.12)
+MAX_LONGEST_COMMON_RUN = env_int("MAX_LONGEST_COMMON_RUN", 9)
+ORIGINALITY_NGRAM_SIZE = env_int("ORIGINALITY_NGRAM_SIZE", 5)
+
+# How many times we re-prompt the model when a gate fails.
+MAX_REWRITE_ATTEMPTS = env_int("MAX_REWRITE_ATTEMPTS", 3)
+
+# Publishable article length. Small models under-write, so the pipeline asks
+# for more than the minimum and retries anything that comes back short.
+MIN_ARTICLE_WORDS = env_int("MIN_ARTICLE_WORDS", 130)
+MAX_ARTICLE_WORDS = env_int("MAX_ARTICLE_WORDS", 400)
+
+# Publish automatically, or hold every article in the review queue.
+AUTO_PUBLISH = env_bool("AUTO_PUBLISH", True)
+
+# Daily scheduler run time, local to TIME_ZONE, used by `manage.py run_scheduler`.
+SCHEDULE_HOUR = env_int("SCHEDULE_HOUR", 6)
+SCHEDULE_MINUTE = env_int("SCHEDULE_MINUTE", 30)
+
+# Seed queries per category used to discover what is trending today.
+NEWS_CATEGORY_QUERIES = {
+    "world": [
+        "top world news today",
+        "breaking international news today",
+    ],
+    "india": [
+        "top India news today",
+        "India breaking news headlines today",
+    ],
+    "business": [
+        "top business and markets news today",
+        "stock market top story today",
+    ],
+    "technology": [
+        "biggest technology news today",
+        "artificial intelligence news today",
+    ],
+    "sports": [
+        "top sports news today",
+        "cricket news today",
+        "football transfer news today",
+    ],
+    "entertainment": [
+        "top entertainment news today",
+        "movie industry news today",
+    ],
+    "rumours": [
+        "trending rumours reported today",
+        "unconfirmed reports trending today",
+    ],
+    "science": [
+        "science and health news today",
+    ],
+}

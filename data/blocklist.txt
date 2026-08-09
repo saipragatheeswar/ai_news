@@ -1,0 +1,11 @@
+# Extra terms that must never appear in a published article.
+# One term per line. Matching is case-insensitive and whole-word.
+# Anything matched here blocks the article outright, so keep this list to
+# terms you never want on the site: slurs, explicit sexual vocabulary, and
+# names you have been asked to stop covering.
+#
+# Lines starting with # are ignored.
+#
+# Examples:
+# slur-goes-here
+# some-explicit-term

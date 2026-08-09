@@ -1,0 +1,9 @@
+<article class="card">
+  <a class="card-cat" href="{{ article.category.get_absolute_url }}">{{ article.category.name }}</a>
+  <h3><a href="{{ article.get_absolute_url }}">{{ article.title }}</a></h3>
+  <p>{{ article.summary }}</p>
+  <div class="card-meta">
+    <time datetime="{{ article.published_at|date:'c' }}">{{ article.published_at|date:"j M Y, H:i" }}</time>
+    <span>{{ article.word_count }} words</span>
+  </div>
+</article>

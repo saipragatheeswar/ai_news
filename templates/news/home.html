@@ -1,0 +1,36 @@
+{% extends "news/base.html" %}
+
+{% block content %}
+  <div class="page-head">
+    <h1>Today's hot topics</h1>
+    <p>{{ today_count }} stor{{ today_count|pluralize:"y,ies" }} published today.</p>
+  </div>
+
+  {% if lead %}
+    <article class="lead">
+      <a class="card-cat" href="{{ lead.category.get_absolute_url }}">{{ lead.category.name }}</a>
+      <h2><a href="{{ lead.get_absolute_url }}">{{ lead.title }}</a></h2>
+      <p class="lead-summary">{{ lead.summary }}</p>
+      <div class="card-meta">
+        <time datetime="{{ lead.published_at|date:'c' }}">{{ lead.published_at|date:"j M Y, H:i" }}</time>
+        <span>{{ lead.attributions.count }} source{{ lead.attributions.count|pluralize }}</span>
+      </div>
+    </article>
+  {% endif %}
+
+  <div class="grid">
+    {% for article in articles %}
+      {% include "news/_card.html" %}
+    {% empty %}
+      {% if not lead %}
+        <div class="empty">
+          <h2>No stories yet</h2>
+          <p>Run the pipeline to fill the front page:</p>
+          <pre>python manage.py run_daily</pre>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% include "news/_pagination.html" %}
+{% endblock %}

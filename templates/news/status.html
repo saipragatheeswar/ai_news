@@ -1,0 +1,40 @@
+{% extends "news/base.html" %}
+
+{% block title %}Pipeline status - {{ site_name }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1>Pipeline status</h1>
+    <p>{{ counts.today }} published today. {{ counts.review }} awaiting review.</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><strong>{{ counts.published }}</strong><span>published</span></div>
+    <div class="stat"><strong>{{ counts.review }}</strong><span>in review queue</span></div>
+    <div class="stat"><strong>{{ counts.rejected }}</strong><span>rejected by gates</span></div>
+  </div>
+
+  <table class="runs">
+    <thead>
+      <tr>
+        <th>Date</th><th>Status</th><th>Target</th><th>Published</th>
+        <th>Held</th><th>Rejected</th><th>Runtime</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for run in runs %}
+        <tr>
+          <td>{{ run.run_for }}</td>
+          <td class="run-{{ run.status }}">{{ run.get_status_display }}</td>
+          <td>{{ run.target_count }}</td>
+          <td>{{ run.articles_published }}</td>
+          <td>{{ run.articles_held }}</td>
+          <td>{{ run.articles_rejected }}</td>
+          <td>{% if run.duration_seconds %}{{ run.duration_seconds|floatformat:0 }}s{% else %}running{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7">No runs recorded yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
