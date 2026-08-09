@@ -62,16 +62,34 @@ class AttributionInline(admin.TabularInline):
 
 class ArticleImageInline(admin.TabularInline):
     model = ArticleImage
-    extra = 0
+    extra = 1
     fields = ("preview", "file", "alt_text", "credit", "licence", "source_page")
     readonly_fields = ("preview",)
+    verbose_name = "Image"
+    verbose_name_plural = "Images (upload or keep the auto-fetched one)"
+
+    @admin.display(description="preview")
+    def preview(self, obj):
+        if not obj or not getattr(obj, "file", None):
+            return "Upload a JPG/PNG below"
+        return format_html(
+            '<img src="{}" style="height:60px;border-radius:4px">', obj.file.url
+        )
+
+
+@admin.register(ArticleImage)
+class ArticleImageAdmin(admin.ModelAdmin):
+    list_display = ("article", "preview", "credit", "licence", "provider", "created_at")
+    list_filter = ("provider", "licence")
+    search_fields = ("article__title", "alt_text", "credit")
+    readonly_fields = ("preview", "width", "height", "created_at")
 
     @admin.display(description="preview")
     def preview(self, obj):
         if not obj.file:
             return "-"
         return format_html(
-            '<img src="{}" style="height:60px;border-radius:4px">', obj.file.url
+            '<img src="{}" style="height:48px;border-radius:4px">', obj.file.url
         )
 
 
