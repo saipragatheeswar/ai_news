@@ -8,6 +8,7 @@ app_name = "news"
 urlpatterns = [
     path("", views.HomeView.as_view(), name="home"),
     path("about/", views.about, name="about"),
+    path("search/", views.SearchView.as_view(), name="search"),
     path("status/", views.pipeline_status, name="status"),
     path("desk/", views.desk, name="desk"),
     path("desk/<slug:slug>/action/", views.desk_action, name="desk_action"),

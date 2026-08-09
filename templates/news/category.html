@@ -11,9 +11,9 @@
 
   <div class="layout">
     <div class="layout-main">
-      <div class="grid">
+      <div class="feed">
         {% for article in articles %}
-          {% include "news/_card.html" %}
+          {% include "news/_feed_item.html" %}
         {% empty %}
           <div class="empty"><h2>Nothing here yet</h2><p>No published stories in this section.</p></div>
         {% endfor %}
@@ -23,7 +23,7 @@
 
     <aside class="layout-side">
       <section class="panel">
-        <h2>Elsewhere on the site</h2>
+        <h2>Elsewhere</h2>
         <ul class="panel-list">
           {% for item in latest %}
             <li>

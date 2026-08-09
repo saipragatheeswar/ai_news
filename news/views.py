@@ -74,6 +74,29 @@ class CategoryView(ListView):
         return context
 
 
+class SearchView(ListView):
+    template_name = "news/search.html"
+    context_object_name = "articles"
+    paginate_by = 15
+
+    def get_queryset(self):
+        self.query = (self.request.GET.get("q") or "").strip()[:120]
+        if len(self.query) < 2:
+            return Article.objects.none()
+        return published_articles().filter(
+            Q(title__icontains=self.query)
+            | Q(summary__icontains=self.query)
+            | Q(body__icontains=self.query)
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["query"] = getattr(self, "query", "")
+        context["search_active"] = True
+        context["categories"] = _active_categories()
+        return context
+
+
 class ArticleView(DetailView):
     template_name = "news/article_detail.html"
     context_object_name = "article"

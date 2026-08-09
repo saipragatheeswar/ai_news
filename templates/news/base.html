@@ -7,7 +7,7 @@
   <meta name="description" content="{% block description %}{{ site_tagline }}{% endblock %}">
   {% block social %}{% endblock %}
   <link rel="alternate" type="application/rss+xml" title="{{ site_name }}" href="{% url 'news:feed' %}">
-  <link rel="stylesheet" href="{% static 'news/site.css' %}">
+  <link rel="stylesheet" href="{% static 'news/site.css' %}?v=2">
 </head>
 <body>
   <div class="topbar">
@@ -15,6 +15,7 @@
       <span>{% now "l, j F Y" %}</span>
       <span class="topbar-links">
         {% if user.is_staff %}<a href="{% url 'news:desk' %}">Editorial desk</a>{% endif %}
+        <a href="{% url 'news:search' %}">Search</a>
         <a href="{% url 'news:feed' %}">RSS</a>
       </span>
     </div>
@@ -23,16 +24,21 @@
   <header class="masthead">
     <div class="wrap masthead-inner">
       <a class="brand" href="{% url 'news:home' %}">
-        <span class="brand-mark"></span>
+        <span class="brand-mark" aria-hidden="true"></span>
         <span>
           <strong>{{ site_name }}</strong>
           <small>{{ site_tagline }}</small>
         </span>
       </a>
+      <form class="search-form" action="{% url 'news:search' %}" method="get" role="search">
+        <input type="search" name="q" value="{{ request.GET.q }}"
+               placeholder="Search stories" aria-label="Search stories" required>
+        <button type="submit">Search</button>
+      </form>
     </div>
-    <nav class="nav">
+    <nav class="nav" aria-label="Sections">
       <div class="wrap nav-inner">
-        <a href="{% url 'news:home' %}" class="{% if not active_category %}is-active{% endif %}">Home</a>
+        <a href="{% url 'news:home' %}" class="{% if not active_category and not search_active %}is-active{% endif %}">Home</a>
         {% for category in categories %}
           <a href="{{ category.get_absolute_url }}"
              class="{% if category.slug == active_category %}is-active{% endif %}">{{ category.name }}</a>
@@ -65,6 +71,7 @@
       </div>
       <p class="footer-links">
         <a href="{% url 'news:about' %}">Editorial policy</a>
+        <a href="{% url 'news:search' %}">Search</a>
         <a href="{% url 'news:feed' %}">RSS</a>
         {% if user.is_staff %}
           <a href="{% url 'news:desk' %}">Desk</a>

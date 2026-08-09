@@ -8,7 +8,7 @@
     <p>
       Everything the pipeline has produced, newest first. Stories with fewer than
       {{ retention_min_views }} views are purged automatically after {{ retention_days }} days.
-      Originality threshold: up to {{ max_ngram_overlap|floatformat:0 }}% source overlap allowed
+      Originality threshold: up to {% widthratio max_ngram_overlap 1 100 %}% source overlap allowed
       (no rewrite loop).
     </p>
   </div>

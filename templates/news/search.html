@@ -1,0 +1,59 @@
+{% extends "news/base.html" %}
+
+{% block title %}{% if query %}Search: {{ query }}{% else %}Search{% endif %} — {{ site_name }}{% endblock %}
+
+{% block content %}
+  <div class="search-hero">
+    <div class="wrap">
+      <h1>Search</h1>
+      <p>Find stories by headline, summary or body text.</p>
+      <form class="search-form" action="{% url 'news:search' %}" method="get" role="search">
+        <input type="search" name="q" value="{{ query }}"
+               placeholder="e.g. SpaceX, cricket, Supreme Court" aria-label="Search stories" autofocus>
+        <button type="submit">Search</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="layout-main">
+      {% if query %}
+        <p class="search-count">
+          {% if page_obj.paginator.count %}
+            {{ page_obj.paginator.count }} result{{ page_obj.paginator.count|pluralize }}
+            for “{{ query }}”
+          {% else %}
+            No results for “{{ query }}”
+          {% endif %}
+        </p>
+        <div class="feed">
+          {% for article in articles %}
+            {% include "news/_feed_item.html" %}
+          {% empty %}
+            <div class="empty">
+              <h2>Nothing matched</h2>
+              <p>Try a shorter word, a person or place name, or a different spelling.</p>
+            </div>
+          {% endfor %}
+        </div>
+        {% include "news/_pagination.html" %}
+      {% else %}
+        <div class="empty">
+          <h2>Search the archive</h2>
+          <p>Type a keyword above to find published stories.</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <aside class="layout-side">
+      <section class="panel">
+        <h2>Browse sections</h2>
+        <ul class="panel-list">
+          {% for category in categories %}
+            <li><a href="{{ category.get_absolute_url }}">{{ category.name }}</a></li>
+          {% endfor %}
+        </ul>
+      </section>
+    </aside>
+  </div>
+{% endblock %}

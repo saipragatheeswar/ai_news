@@ -358,6 +358,18 @@ class ViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.live.title)
         self.assertNotContains(response, self.held.title)
+        self.assertContains(response, 'name="q"')  # header search
+
+    def test_search_finds_published_by_title(self):
+        response = self.client.get("/search/", {"q": "match"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.live.title)
+        self.assertNotContains(response, self.held.title)
+
+    def test_search_ignores_short_queries(self):
+        response = self.client.get("/search/", {"q": "a"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["articles"]), 0)
 
     def test_home_shows_lead_plus_remaining_stories(self):
         for index in range(4):

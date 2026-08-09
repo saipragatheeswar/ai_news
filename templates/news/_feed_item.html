@@ -1,0 +1,14 @@
+<article class="feed-item">
+  <a class="feed-thumb" href="{{ article.get_absolute_url }}" tabindex="-1" aria-hidden="true">
+    {% include "news/_thumb.html" with article=article variant="row" %}
+  </a>
+  <div class="feed-text">
+    <a class="card-cat" href="{{ article.category.get_absolute_url }}">{{ article.category.name }}</a>
+    <h3 class="feed-title"><a href="{{ article.get_absolute_url }}">{{ article.title }}</a></h3>
+    <p class="feed-summary">{{ article.summary|truncatewords:28 }}</p>
+    <div class="card-meta">
+      <time datetime="{{ article.published_at|date:'c' }}">{{ article.published_at|date:"j M, H:i" }}</time>
+      <span>{{ article.reading_minutes }} min read</span>
+    </div>
+  </div>
+</article>
