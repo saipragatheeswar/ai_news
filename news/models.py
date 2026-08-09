@@ -168,6 +168,13 @@ class Article(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = _unique_slug(Article, self.title)
+        # Normalize line endings so paragraph breaks always survive storage.
+        if self.body:
+            normalised = self.body.replace("\r\n", "\n").replace("\r", "\n")
+            # Collapse 3+ blank lines; keep blank-line paragraph separators.
+            while "\n\n\n" in normalised:
+                normalised = normalised.replace("\n\n\n", "\n\n")
+            self.body = normalised.strip()
         self.word_count = len(self.body.split())
         if self.status == self.Status.PUBLISHED and self.published_at is None:
             self.published_at = timezone.now()
@@ -178,7 +185,20 @@ class Article(models.Model):
 
     @property
     def paragraphs(self) -> list[str]:
-        return [p.strip() for p in self.body.split("\n\n") if p.strip()]
+        """Split body into display paragraphs.
+
+        Writers sometimes emit ``\\r\\n`` or single newlines; treat blank lines
+        as paragraph breaks and fall back to single newlines when needed.
+        """
+        text = (self.body or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+        if not text:
+            return []
+        blocks = [p.strip() for p in text.split("\n\n") if p.strip()]
+        if len(blocks) > 1:
+            return blocks
+        # One blob with single newlines (common from small models).
+        lines = [p.strip() for p in text.split("\n") if p.strip()]
+        return lines if len(lines) > 1 else blocks
 
     @property
     def is_live(self) -> bool:

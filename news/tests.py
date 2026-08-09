@@ -325,6 +325,17 @@ class ModelTests(TestCase):
         self.assertEqual(article.slug, "a-test-headline")
         self.assertEqual(len(article.paragraphs), 2)
 
+    def test_crlf_paragraphs_are_split_for_display(self):
+        category = Category.objects.create(name="World", slug="world")
+        article = Article.objects.create(
+            category=category,
+            title="CRLF body",
+            body="First paragraph here.\r\n\r\nSecond paragraph here.\r\n\r\nThird one.",
+            status=Article.Status.PUBLISHED,
+        )
+        self.assertEqual(len(article.paragraphs), 3)
+        self.assertEqual(article.paragraphs[0], "First paragraph here.")
+
     def test_slugs_stay_unique(self):
         category = Category.objects.create(name="World", slug="world")
         first = Article.objects.create(

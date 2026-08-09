@@ -405,7 +405,7 @@ def _clean_body(value) -> str:
         else:
             return ""
 
-    text = value.replace("\r\n", "\n")
+    text = value.replace("\r\n", "\n").replace("\r", "\n")
     text = re.sub(r"^\s{0,3}#{1,6}\s*", "", text, flags=re.MULTILINE)
     text = re.sub(r"^\s{0,3}[-*+]\s+", "", text, flags=re.MULTILINE)
     text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
@@ -418,6 +418,7 @@ def _clean_body(value) -> str:
     if len(paragraphs) == 1 and "\n" in text:
         paragraphs = [" ".join(p.split()) for p in text.split("\n") if p.strip()]
 
+    # Always store Unix paragraph breaks so the site template can split them.
     return "\n\n".join(paragraphs).strip()
 
 
