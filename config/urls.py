@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path
@@ -16,3 +18,7 @@ urlpatterns = [
     ),
     path("", include("news.urls")),
 ]
+
+if settings.DEBUG:
+    # In production nginx serves MEDIA_ROOT directly; see the README.
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -158,15 +158,8 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR("  unusable response"))
                 continue
 
-            length_issue = rewriter.length_problem(draft)
-            if length_issue and attempt < rewriter.attempt_budget():
-                self.stdout.write(
-                    self.style.ERROR(
-                        f"  wrong length ({len(draft.body.split())} words), rewriting"
-                    )
-                )
-                feedback = length_issue
-                continue
+            if trimmed := rewriter.trim_to_maximum(draft):
+                self.stdout.write(f"  trimmed to {trimmed} words")
 
             full_text = f"{draft.title}\n\n{draft.body}"
             originality_report = originality.check(full_text, references)

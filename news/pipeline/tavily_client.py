@@ -108,6 +108,37 @@ class NewsSearch:
         logger.debug("query=%r returned %d usable hits", query, len(hits))
         return hits
 
+    def extract(self, urls: list[str]) -> dict[str, str]:
+        """Fetch full article text for URLs, returning {url: text}.
+
+        Search snippets are only a couple of hundred words, which is far too
+        little to write a long article from. The extract endpoint returns the
+        whole page, which is what makes a substantial piece possible.
+        """
+        if not urls:
+            return {}
+
+        results: dict[str, str] = {}
+        # The endpoint accepts batches; keep them small so one bad URL cannot
+        # cost us the whole set.
+        for batch in _chunked(urls, 5):
+            try:
+                response = self._client.extract(urls=batch, extract_depth="advanced")
+            except Exception as exc:
+                logger.warning("extract failed for %s: %s", batch, exc)
+                continue
+
+            for item in response.get("results", []) or []:
+                url = (item.get("url") or "").strip()
+                text = _clean_raw(item.get("raw_content"), limit=40000)
+                if url and text:
+                    results[url] = text
+            for failed in response.get("failed_results", []) or []:
+                logger.debug("extract could not read %s", failed)
+
+        logger.info("extracted full text for %d/%d urls", len(results), len(urls))
+        return results
+
     def _call_with_retry(self, payload: dict, attempts: int = 3) -> dict | None:
         delay = 2.0
         for attempt in range(1, attempts + 1):
@@ -131,6 +162,11 @@ class NewsSearch:
                 time.sleep(delay)
                 delay *= 2
         return None
+
+
+def _chunked(items: list[str], size: int):
+    for start in range(0, len(items), size):
+        yield items[start : start + size]
 
 
 def _clean_raw(raw: str | None, limit: int = 6000) -> str:

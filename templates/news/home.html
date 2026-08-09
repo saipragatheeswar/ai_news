@@ -1,36 +1,84 @@
 {% extends "news/base.html" %}
 
 {% block content %}
-  <div class="page-head">
-    <h1>Today's hot topics</h1>
-    <p>{{ today_count }} stor{{ today_count|pluralize:"y,ies" }} published today.</p>
-  </div>
+  <div class="layout">
+    <div class="layout-main">
+      {% if lead %}
+        <article class="lead">
+          <a class="lead-thumb" href="{{ lead.get_absolute_url }}" tabindex="-1" aria-hidden="true">
+            {% include "news/_thumb.html" with article=lead variant="lead" %}
+          </a>
+          <div class="lead-text">
+            <a class="card-cat" href="{{ lead.category.get_absolute_url }}">{{ lead.category.name }}</a>
+            <h1><a href="{{ lead.get_absolute_url }}">{{ lead.title }}</a></h1>
+            <p class="lead-summary">{{ lead.summary }}</p>
+            <div class="card-meta">
+              <time datetime="{{ lead.published_at|date:'c' }}">{{ lead.published_at|date:"j M Y, H:i" }}</time>
+              <span>{{ lead.reading_minutes }} min read</span>
+            </div>
+          </div>
+        </article>
+      {% endif %}
 
-  {% if lead %}
-    <article class="lead">
-      <a class="card-cat" href="{{ lead.category.get_absolute_url }}">{{ lead.category.name }}</a>
-      <h2><a href="{{ lead.get_absolute_url }}">{{ lead.title }}</a></h2>
-      <p class="lead-summary">{{ lead.summary }}</p>
-      <div class="card-meta">
-        <time datetime="{{ lead.published_at|date:'c' }}">{{ lead.published_at|date:"j M Y, H:i" }}</time>
-        <span>{{ lead.attributions.count }} source{{ lead.attributions.count|pluralize }}</span>
-      </div>
-    </article>
-  {% endif %}
+      {% if secondary %}
+        <div class="grid grid-two">
+          {% for article in secondary %}{% include "news/_card.html" %}{% endfor %}
+        </div>
+      {% endif %}
 
-  <div class="grid">
-    {% for article in articles %}
-      {% include "news/_card.html" %}
-    {% empty %}
-      {% if not lead %}
+      {% if articles %}
+        <h2 class="section-head">More stories</h2>
+        <div class="grid">
+          {% for article in articles %}{% include "news/_card.html" %}{% endfor %}
+        </div>
+      {% elif not lead %}
         <div class="empty">
           <h2>No stories yet</h2>
           <p>Run the pipeline to fill the front page:</p>
           <pre>python manage.py run_daily</pre>
         </div>
       {% endif %}
-    {% endfor %}
-  </div>
 
-  {% include "news/_pagination.html" %}
+      {% include "news/_pagination.html" %}
+    </div>
+
+    <aside class="layout-side">
+      {% if most_read %}
+        <section class="panel">
+          <h2>Most read this week</h2>
+          <ol class="ranked">
+            {% for article in most_read %}
+              <li>
+                <a href="{{ article.get_absolute_url }}">{{ article.title }}</a>
+                <span class="panel-meta">{{ article.view_count }} view{{ article.view_count|pluralize }}</span>
+              </li>
+            {% endfor %}
+          </ol>
+        </section>
+      {% endif %}
+
+      <section class="panel">
+        <h2>Latest</h2>
+        <ul class="panel-list">
+          {% for article in latest %}
+            <li>
+              <a href="{{ article.get_absolute_url }}">{{ article.title }}</a>
+              <span class="panel-meta">{{ article.category.name }} · {{ article.published_at|date:"H:i" }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <section class="panel panel-quiet">
+        <h2>About these reports</h2>
+        <p>
+          {{ today_count }} stor{{ today_count|pluralize:"y,ies" }} published today.
+          Each one is written from scratch off a fact sheet drawn from several
+          outlets, then checked for originality and editorial safety before it
+          goes live.
+        </p>
+        <a class="panel-link" href="{% url 'news:about' %}">Read the policy</a>
+      </section>
+    </aside>
+  </div>
 {% endblock %}

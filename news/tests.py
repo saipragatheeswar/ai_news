@@ -1,10 +1,16 @@
 """Tests for the editorial gates and topic clustering."""
 
+from datetime import timedelta
+
+from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from news.models import Article, Category, Topic
 from news.pipeline import originality, rewriter, safety, topics
+from news.pipeline.llm import extract_json
 
 
 class OriginalityTests(TestCase):
@@ -59,8 +65,14 @@ FILLER = (
 
 
 def pad(body: str) -> str:
-    """Bring a short test body up to publishable length."""
-    return f"{body} {FILLER}"
+    """Bring a short test body up to publishable length.
+
+    Repeats as needed so the helper keeps working if the minimum changes.
+    """
+    text = body
+    while len(text.split()) < settings.MIN_ARTICLE_WORDS + 20:
+        text = f"{text} {FILLER}"
+    return text
 
 
 class SafetyRuleTests(TestCase):
@@ -358,8 +370,10 @@ class ViewTests(TestCase):
             )
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
+        # The front page splits into a lead, two secondary cards, then the rest.
         self.assertIsNotNone(response.context["lead"])
-        self.assertEqual(len(response.context["articles"]), 4)
+        self.assertEqual(len(response.context["secondary"]), 2)
+        self.assertEqual(len(response.context["articles"]), 2)
         for index in range(4):
             self.assertContains(response, f"Extra published story number {index}")
 
@@ -391,6 +405,217 @@ class ViewTests(TestCase):
     def test_policy_and_status_pages_render(self):
         self.assertEqual(self.client.get("/about/").status_code, 200)
         self.assertEqual(self.client.get("/status/").status_code, 200)
+
+
+class JsonRecoveryTests(TestCase):
+    """Small models run out of tokens mid-array; salvage what they did produce."""
+
+    def test_plain_json(self):
+        self.assertEqual(extract_json('{"facts": ["one"]}'), {"facts": ["one"]})
+
+    def test_fenced_json(self):
+        self.assertEqual(
+            extract_json('```json\n{"facts": ["one"]}\n```'), {"facts": ["one"]}
+        )
+
+    def test_json_embedded_in_prose(self):
+        raw = 'Sure! Here you go:\n{"facts": ["one", "two"]}\nHope that helps.'
+        self.assertEqual(extract_json(raw), {"facts": ["one", "two"]})
+
+    def test_truncated_array_is_recovered(self):
+        raw = '{"facts": [\n"Revenue rose 48% to $22.97 billion.",\n"Guidance was raised.",\n"The company recorded a charge of'
+        recovered = extract_json(raw)
+        self.assertIsNotNone(recovered)
+        self.assertEqual(
+            recovered["facts"],
+            ["Revenue rose 48% to $22.97 billion.", "Guidance was raised."],
+        )
+
+    def test_truncated_after_complete_element(self):
+        raw = '{"facts": ["One complete fact.", "Another one.",'
+        recovered = extract_json(raw)
+        self.assertEqual(recovered["facts"], ["One complete fact.", "Another one."])
+
+    def test_unrecoverable_returns_none(self):
+        self.assertIsNone(extract_json("I cannot help with that request."))
+
+
+class OriginalityEntityTests(TestCase):
+    """Facts are not copyrightable, so shared names and figures must not fail a draft."""
+
+    def test_factual_run_is_not_treated_as_copying(self):
+        source = (
+            "Spider-Man: Brand New Day earned $355 million in its opening weekend "
+            "at the North American box office, distributor Sony said on Sunday."
+        )
+        draft = (
+            "Spider-Man: Brand New Day earned $355 million in its opening weekend, "
+            "a figure confirmed by the studio behind the release."
+        )
+        report = originality.check(draft, [("sony.example", source)])
+        self.assertLessEqual(report.longest_run, 9)
+
+    def test_reused_prose_is_still_caught(self):
+        source = (
+            "In a move that surprised nearly everyone watching the industry, the "
+            "decision arrived after weeks of quiet negotiation behind closed doors."
+        )
+        draft = (
+            "In a move that surprised nearly everyone watching the industry, the "
+            "decision arrived after weeks of quiet negotiation behind closed doors."
+        )
+        report = originality.check(draft, [("example.com", source)])
+        self.assertGreater(report.longest_run, 9)
+        self.assertFalse(report.passed)
+        self.assertIn("surprised nearly everyone", report.longest_run_text)
+
+    def test_factual_run_classifier(self):
+        factual = "Brand New Day earned 355 million in its opening weekend".split()
+        prose = "the decision arrived after weeks of quiet negotiation".split()
+        self.assertTrue(originality.is_factual_run(factual))
+        self.assertFalse(originality.is_factual_run(prose))
+
+
+class ViewCountingTests(TestCase):
+    def setUp(self):
+        self.category = Category.objects.create(name="World", slug="world")
+        self.article = Article.objects.create(
+            category=self.category,
+            title="A story readers might open",
+            body="Body copy.",
+            status=Article.Status.PUBLISHED,
+        )
+
+    def read(self, agent="Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36"):
+        return self.client.get(
+            self.article.get_absolute_url(), headers={"user-agent": agent}
+        )
+
+    def test_reader_increments_view_count(self):
+        self.read()
+        self.read()
+        self.article.refresh_from_db()
+        self.assertEqual(self.article.view_count, 2)
+        self.assertIsNotNone(self.article.last_viewed_at)
+
+    def test_bots_are_not_counted(self):
+        self.read(agent="Googlebot/2.1 (+http://www.google.com/bot.html)")
+        self.read(agent="python-requests/2.32")
+        self.article.refresh_from_db()
+        self.assertEqual(self.article.view_count, 0)
+
+    def test_staff_previews_are_not_counted(self):
+        User.objects.create_user("ed", password="pw12345!", is_staff=True)
+        self.client.login(username="ed", password="pw12345!")
+        self.read()
+        self.article.refresh_from_db()
+        self.assertEqual(self.article.view_count, 0)
+
+
+class RetentionTests(TestCase):
+    def setUp(self):
+        self.category = Category.objects.create(name="World", slug="world")
+
+    def make(self, title, *, age_days, views, status=Article.Status.PUBLISHED):
+        article = Article.objects.create(
+            category=self.category, title=title, body="Body.", status=status
+        )
+        # created_at is auto_now_add, so age has to be forced after insert.
+        Article.objects.filter(pk=article.pk).update(
+            created_at=timezone.now() - timedelta(days=age_days), view_count=views
+        )
+        return article
+
+    def test_unread_old_articles_are_purged(self):
+        stale = self.make("Nobody read this one", age_days=10, views=0)
+        popular = self.make("Plenty of readers here", age_days=10, views=50)
+        recent = self.make("Published this morning", age_days=0, views=0)
+
+        call_command("purge_stale", verbosity=0)
+
+        self.assertFalse(Article.objects.filter(pk=stale.pk).exists())
+        self.assertTrue(Article.objects.filter(pk=popular.pk).exists())
+        self.assertTrue(Article.objects.filter(pk=recent.pk).exists())
+
+    def test_dry_run_deletes_nothing(self):
+        stale = self.make("Nobody read this one", age_days=10, views=0)
+        call_command("purge_stale", "--dry-run", verbosity=0)
+        self.assertTrue(Article.objects.filter(pk=stale.pk).exists())
+
+    def test_articles_awaiting_review_are_kept(self):
+        held = self.make(
+            "Still needs an editor",
+            age_days=30,
+            views=0,
+            status=Article.Status.NEEDS_REVIEW,
+        )
+        call_command("purge_stale", verbosity=0)
+        self.assertTrue(Article.objects.filter(pk=held.pk).exists())
+
+
+class DeskTests(TestCase):
+    def setUp(self):
+        self.category = Category.objects.create(name="World", slug="world")
+        self.article = Article.objects.create(
+            category=self.category,
+            title="A story on the desk",
+            body="Body copy.",
+            status=Article.Status.NEEDS_REVIEW,
+        )
+
+    def login_staff(self):
+        User.objects.create_user("ed", password="pw12345!", is_staff=True)
+        self.client.login(username="ed", password="pw12345!")
+
+    def test_desk_requires_staff(self):
+        response = self.client.get("/desk/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("login", response["Location"])
+
+    def test_desk_lists_articles_grouped_by_day(self):
+        self.login_staff()
+        response = self.client.get("/desk/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.article.title)
+        self.assertEqual(len(list(response.context["days"])), 1)
+
+    def test_staff_can_publish_from_desk(self):
+        self.login_staff()
+        self.client.post(
+            f"/desk/{self.article.slug}/action/", {"action": "publish"}, follow=True
+        )
+        self.article.refresh_from_db()
+        self.assertEqual(self.article.status, Article.Status.PUBLISHED)
+
+    def test_staff_can_delete_from_desk(self):
+        self.login_staff()
+        self.client.post(
+            f"/desk/{self.article.slug}/action/", {"action": "delete"}, follow=True
+        )
+        self.assertFalse(Article.objects.filter(pk=self.article.pk).exists())
+
+    def test_delete_requires_post(self):
+        self.login_staff()
+        response = self.client.get(f"/desk/{self.article.slug}/action/")
+        self.assertEqual(response.status_code, 405)
+        self.assertTrue(Article.objects.filter(pk=self.article.pk).exists())
+
+
+class ShareLinkTests(TestCase):
+    def test_article_page_offers_share_links(self):
+        category = Category.objects.create(name="World", slug="world")
+        article = Article.objects.create(
+            category=category,
+            title="A story worth sharing",
+            body="Body copy.",
+            status=Article.Status.PUBLISHED,
+        )
+        response = self.client.get(article.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        for key in ("whatsapp", "x", "facebook", "linkedin", "telegram", "email"):
+            self.assertIn(key, response.context["share"])
+        self.assertContains(response, "api.whatsapp.com")
+        self.assertContains(response, 'property="og:title"')
 
 
 class AdminActionTests(TestCase):

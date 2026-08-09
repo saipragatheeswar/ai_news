@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import uuid
+from pathlib import Path
 
 from django.db import models
 from django.urls import reverse
@@ -112,6 +114,12 @@ class Source(models.Model):
         return f"{self.title}\n{self.raw_content or self.snippet}".strip()
 
 
+def article_image_path(instance, filename: str) -> str:
+    day = (instance.article.published_at or timezone.now()).strftime("%Y/%m/%d")
+    extension = Path(filename).suffix.lower() or ".jpg"
+    return f"articles/{day}/{uuid.uuid4().hex}{extension}"
+
+
 class Article(models.Model):
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
@@ -146,6 +154,10 @@ class Article(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Readership, used to decide what is worth keeping past the retention window.
+    view_count = models.PositiveIntegerField(default=0, db_index=True)
+    last_viewed_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ["-published_at", "-created_at"]
         indexes = [models.Index(fields=["status", "-published_at"])]
@@ -171,6 +183,59 @@ class Article(models.Model):
     @property
     def is_live(self) -> bool:
         return self.status == self.Status.PUBLISHED
+
+    @property
+    def lead_image(self):
+        return self.images.first()
+
+    @property
+    def reading_minutes(self) -> int:
+        return max(1, round(self.word_count / 200))
+
+    def register_view(self) -> None:
+        """Counted with an UPDATE so concurrent reads cannot clobber each other."""
+        Article.objects.filter(pk=self.pk).update(
+            view_count=models.F("view_count") + 1, last_viewed_at=timezone.now()
+        )
+
+
+class ArticleImage(models.Model):
+    """An openly-licensed image stored on our own server.
+
+    We never copy pictures from the outlets we summarise: news photography is
+    almost always agency-licensed and is the most aggressively enforced form of
+    copyright online. Everything here carries a licence we can actually point
+    to, and the credit line is rendered with the image.
+    """
+
+    article = models.ForeignKey(
+        Article, on_delete=models.CASCADE, related_name="images"
+    )
+    file = models.ImageField(upload_to=article_image_path)
+    alt_text = models.CharField(max_length=300, blank=True)
+    credit = models.CharField(max_length=200, blank=True)
+    licence = models.CharField(max_length=80, blank=True)
+    licence_url = models.URLField(max_length=500, blank=True)
+    source_page = models.URLField(max_length=1000, blank=True)
+    provider = models.CharField(max_length=60, blank=True)
+    width = models.PositiveIntegerField(default=0)
+    height = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return self.alt_text or Path(self.file.name).name
+
+    @property
+    def attribution(self) -> str:
+        parts = [p for p in (self.credit, self.licence) if p]
+        return " / ".join(parts)
+
+    def delete(self, *args, **kwargs):
+        self.file.delete(save=False)
+        super().delete(*args, **kwargs)
 
 
 class Attribution(models.Model):

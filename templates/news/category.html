@@ -1,6 +1,6 @@
 {% extends "news/base.html" %}
 
-{% block title %}{{ category.name }} - {{ site_name }}{% endblock %}
+{% block title %}{{ category.name }} — {{ site_name }}{% endblock %}
 {% block description %}Latest {{ category.name }} stories on {{ site_name }}.{% endblock %}
 
 {% block content %}
@@ -9,13 +9,30 @@
     {% if category.description %}<p>{{ category.description }}</p>{% endif %}
   </div>
 
-  <div class="grid">
-    {% for article in articles %}
-      {% include "news/_card.html" %}
-    {% empty %}
-      <div class="empty"><h2>Nothing here yet</h2><p>No published stories in this section.</p></div>
-    {% endfor %}
-  </div>
+  <div class="layout">
+    <div class="layout-main">
+      <div class="grid">
+        {% for article in articles %}
+          {% include "news/_card.html" %}
+        {% empty %}
+          <div class="empty"><h2>Nothing here yet</h2><p>No published stories in this section.</p></div>
+        {% endfor %}
+      </div>
+      {% include "news/_pagination.html" %}
+    </div>
 
-  {% include "news/_pagination.html" %}
+    <aside class="layout-side">
+      <section class="panel">
+        <h2>Elsewhere on the site</h2>
+        <ul class="panel-list">
+          {% for item in latest %}
+            <li>
+              <a href="{{ item.get_absolute_url }}">{{ item.title }}</a>
+              <span class="panel-meta">{{ item.category.name }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    </aside>
+  </div>
 {% endblock %}

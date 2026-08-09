@@ -60,6 +60,38 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f"  OK - replied {reply[:40]!r}"))
 
         self.stdout.write("")
+        self.stdout.write("Openly-licensed image search")
+        if not settings.FETCH_IMAGES:
+            self.stdout.write("  disabled (FETCH_IMAGES=0)")
+        else:
+            from news.pipeline import images
+
+            found = False
+            for finder in (images._search_openverse, images._search_wikimedia):
+                name = finder.__name__.replace("_search_", "")
+                try:
+                    candidate = finder("parliament building")
+                except Exception as exc:
+                    self.stdout.write(self.style.WARNING(f"  {name}: failed ({exc})"))
+                    continue
+                if candidate:
+                    found = True
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            f"  {name}: OK - {candidate.licence} by {candidate.credit}"
+                        )
+                    )
+                else:
+                    self.stdout.write(f"  {name}: no usable result")
+            if not found:
+                self.stdout.write(
+                    self.style.WARNING(
+                        "  No image provider responded; articles will use "
+                        "generated category cards instead."
+                    )
+                )
+
+        self.stdout.write("")
         if ok:
             self.stdout.write(
                 self.style.SUCCESS("Setup looks good. Run: python manage.py run_daily")

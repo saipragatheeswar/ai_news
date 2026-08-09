@@ -10,7 +10,13 @@ from django.db import transaction
 from django.utils import timezone
 
 from news.models import Article, Attribution, PipelineRun, Source, Topic
-from news.pipeline import originality, rewriter, safety, topics as topic_discovery
+from news.pipeline import (
+    images,
+    originality,
+    rewriter,
+    safety,
+    topics as topic_discovery,
+)
 from news.pipeline.llm import LocalModel
 from news.pipeline.tavily_client import NewsSearch
 
@@ -162,11 +168,12 @@ class Pipeline:
                 feedback = "- Your last response was unusable. Return valid JSON."
                 continue
 
-            length_issue = rewriter.length_problem(draft)
-            if length_issue and attempt < rewriter.attempt_budget():
-                logger.info("attempt %d wrong length; asking for a rewrite", attempt)
-                feedback = length_issue
-                continue
+            # Length is handled inside the writer by adding further passes, not
+            # by rewriting: a short draft needs more material, not new wording.
+            # Anything still short falls through to the safety gate, which holds
+            # it for review rather than discarding the work.
+            if trimmed := rewriter.trim_to_maximum(draft):
+                logger.info("trimmed overlong draft to %d words", trimmed)
 
             full_text = f"{draft.title}\n\n{draft.body}"
             originality_report = originality.check(full_text, references)
@@ -199,9 +206,11 @@ class Pipeline:
                 self.model, draft.title, draft.body, category_slug=topic.category.slug
             )
             combined = safety.combine(rule_report, model_report)
-            return self._store(
+            article = self._store(
                 topic, draft, combined, originality_report, usable, result
             )
+            self._attach_image(article, topic, fact_sheet)
+            return article
 
         # Every attempt failed a gate: keep the last draft for a human to see.
         reason_parts = []
@@ -272,6 +281,22 @@ class Pipeline:
             result.rejected += 1
             logger.info("rejected: %s (%s)", article.title, report.summary)
         return article
+
+    def _attach_image(
+        self, article: Article, topic: Topic, fact_sheet: rewriter.FactSheet
+    ) -> None:
+        """Best-effort illustration. Never fail an article over a missing image."""
+        if not settings.FETCH_IMAGES:
+            return
+        try:
+            images.attach_image(
+                article,
+                images.queries_for(
+                    topic.label, fact_sheet.entities, topic.category.name
+                ),
+            )
+        except Exception:
+            logger.exception("image lookup failed for article %s", article.pk)
 
     def _skip(self, topic: Topic, reason: str, result: RunResult) -> None:
         logger.info("skipping topic #%s: %s", topic.pk, reason)

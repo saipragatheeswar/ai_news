@@ -1,7 +1,14 @@
+from collections import OrderedDict
+from datetime import timedelta
+from urllib.parse import quote
+
 from django.conf import settings
-from django.db.models import Count, Q
-from django.shortcuts import get_object_or_404, render
+from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
+from django.db.models import Count, Q, Sum
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 from django.views.generic import DetailView, ListView
 
 from news.models import Article, Category, PipelineRun
@@ -11,6 +18,7 @@ def published_articles():
     return (
         Article.objects.filter(status=Article.Status.PUBLISHED)
         .select_related("category")
+        .prefetch_related("images")
         .order_by("-published_at")
     )
 
@@ -18,7 +26,7 @@ def published_articles():
 class HomeView(ListView):
     template_name = "news/home.html"
     context_object_name = "articles"
-    paginate_by = 12
+    paginate_by = 13
 
     def get_queryset(self):
         return published_articles()
@@ -31,9 +39,17 @@ class HomeView(ListView):
         # The newest story runs large, but only at the top of the first page.
         on_first_page = page is None or page.number == 1
         context["lead"] = articles[0] if on_first_page and articles else None
-        context["articles"] = articles[1:] if context["lead"] else articles
+        rest = articles[1:] if context["lead"] else articles
+        context["secondary"] = rest[:2]
+        context["articles"] = rest[2:]
 
         context["categories"] = _active_categories()
+        context["latest"] = published_articles()[:8]
+        context["most_read"] = (
+            published_articles()
+            .filter(published_at__gte=timezone.now() - timedelta(days=7))
+            .order_by("-view_count")[:5]
+        )
         context["today_count"] = published_articles().filter(
             published_at__date=timezone.localdate()
         ).count()
@@ -52,7 +68,9 @@ class CategoryView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["category"] = self.category
+        context["active_category"] = self.category.slug
         context["categories"] = _active_categories()
+        context["latest"] = published_articles().exclude(category=self.category)[:8]
         return context
 
 
@@ -62,21 +80,58 @@ class ArticleView(DetailView):
 
     def get_queryset(self):
         queryset = Article.objects.select_related("category").prefetch_related(
-            "attributions"
+            "attributions", "images"
         )
         if self.request.user.is_staff:
             return queryset
         return queryset.filter(status=Article.Status.PUBLISHED)
 
+    def get(self, request, *args, **kwargs):
+        response = super().get(request, *args, **kwargs)
+        # Readership decides what survives the retention window, so only count
+        # real readers: not staff previewing, not bots we can cheaply spot.
+        if self.object.is_live and not request.user.is_staff and not _looks_like_bot(request):
+            self.object.register_view()
+        return response
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        article = self.object
+        context["active_category"] = article.category.slug
         context["categories"] = _active_categories()
         context["related"] = (
             published_articles()
-            .filter(category=self.object.category)
-            .exclude(pk=self.object.pk)[:4]
+            .filter(category=article.category)
+            .exclude(pk=article.pk)[:4]
         )
+        context["latest"] = published_articles().exclude(pk=article.pk)[:8]
+        context["share"] = _share_links(self.request, article)
         return context
+
+
+def _share_links(request, article) -> dict[str, str]:
+    url = request.build_absolute_uri(article.get_absolute_url())
+    encoded_url = quote(url, safe="")
+    title = quote(article.title, safe="")
+    return {
+        "url": url,
+        "whatsapp": f"https://api.whatsapp.com/send?text={title}%20{encoded_url}",
+        "x": f"https://twitter.com/intent/tweet?text={title}&url={encoded_url}",
+        "facebook": f"https://www.facebook.com/sharer/sharer.php?u={encoded_url}",
+        "linkedin": f"https://www.linkedin.com/sharing/share-offsite/?url={encoded_url}",
+        "telegram": f"https://t.me/share/url?url={encoded_url}&text={title}",
+        "email": f"mailto:?subject={title}&body={encoded_url}",
+    }
+
+
+def _looks_like_bot(request) -> bool:
+    agent = (request.META.get("HTTP_USER_AGENT") or "").lower()
+    if not agent:
+        return True
+    return any(
+        token in agent
+        for token in ("bot", "crawl", "spider", "slurp", "curl", "wget", "python-requests")
+    )
 
 
 def about(request):
@@ -89,12 +144,87 @@ def about(request):
             "max_overlap": settings.MAX_NGRAM_OVERLAP,
             "daily_target": settings.DAILY_ARTICLE_TARGET,
             "auto_publish": settings.AUTO_PUBLISH,
+            "retention_days": settings.RETENTION_DAYS,
         },
     )
 
 
+# --- Editorial desk -------------------------------------------------------
+
+
+@staff_member_required
+def desk(request):
+    """Everything published, grouped by day, with delete in one click."""
+    status = request.GET.get("status") or ""
+    articles = (
+        Article.objects.select_related("category")
+        .prefetch_related("images")
+        .order_by("-created_at")
+    )
+    if status in Article.Status.values:
+        articles = articles.filter(status=status)
+
+    by_day: "OrderedDict[object, list[Article]]" = OrderedDict()
+    for article in articles[:400]:
+        day = timezone.localtime(article.created_at).date()
+        by_day.setdefault(day, []).append(article)
+
+    totals = {
+        row["status"]: row["n"]
+        for row in Article.objects.values("status").annotate(n=Count("id"))
+    }
+    return render(
+        request,
+        "news/desk.html",
+        {
+            "categories": _active_categories(),
+            "days": by_day.items(),
+            "totals": totals,
+            "total_views": Article.objects.aggregate(n=Sum("view_count"))["n"] or 0,
+            "runs": PipelineRun.objects.all()[:8],
+            "status_filter": status,
+            "statuses": Article.Status.choices,
+            "retention_days": settings.RETENTION_DAYS,
+            "retention_min_views": settings.RETENTION_MIN_VIEWS,
+        },
+    )
+
+
+@staff_member_required
+@require_POST
+def desk_action(request, slug):
+    article = get_object_or_404(Article, slug=slug)
+    action = request.POST.get("action")
+
+    if action == "delete":
+        title = article.title
+        for image in article.images.all():
+            image.delete()
+        article.delete()
+        messages.success(request, f"Deleted “{title}”.")
+    elif action == "publish":
+        article.status = Article.Status.PUBLISHED
+        article.published_at = article.published_at or timezone.now()
+        article.save()
+        messages.success(request, f"Published “{article.title}”.")
+    elif action == "unpublish":
+        article.status = Article.Status.NEEDS_REVIEW
+        article.published_at = None
+        article.save()
+        messages.info(request, f"Moved “{article.title}” back to review.")
+    elif action == "reject":
+        article.status = Article.Status.REJECTED
+        article.published_at = None
+        article.save()
+        messages.warning(request, f"Rejected “{article.title}”.")
+    else:
+        messages.error(request, "Unknown action.")
+
+    return redirect(request.POST.get("next") or "news:desk")
+
+
 def pipeline_status(request):
-    """Lightweight operational view of the last week of runs."""
+    """Lightweight operational view of recent runs."""
     return render(
         request,
         "news/status.html",

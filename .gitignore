@@ -7,6 +7,8 @@ __pycache__/
 venv/
 staticfiles/
 logs/
+# Downloaded article images; regenerated per environment.
+media/
 .idea/
 .vscode/
 *.log

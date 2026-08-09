@@ -1,0 +1,16 @@
+{% comment %}
+Renders an article's picture, or a deterministic gradient card when no
+openly-licensed image was available. `variant` controls the aspect ratio.
+{% endcomment %}
+{% with image=article.lead_image %}
+  {% if image %}
+    <img class="thumb thumb-{{ variant|default:'card' }}"
+         src="{{ image.file.url }}"
+         alt="{{ image.alt_text }}"
+         loading="lazy" decoding="async">
+  {% else %}
+    <span class="thumb thumb-{{ variant|default:'card' }} thumb-fallback cat-{{ article.category.slug }}">
+      <span>{{ article.category.name }}</span>
+    </span>
+  {% endif %}
+{% endwith %}

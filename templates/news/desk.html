@@ -1,0 +1,110 @@
+{% extends "news/base.html" %}
+
+{% block title %}Editorial desk — {{ site_name }}{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1>Editorial desk</h1>
+    <p>
+      Everything the pipeline has produced, newest first. Stories with fewer than
+      {{ retention_min_views }} views are purged automatically after {{ retention_days }} days.
+    </p>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><strong>{{ totals.published|default:0 }}</strong><span>published</span></div>
+    <div class="stat"><strong>{{ totals.needs_review|default:0 }}</strong><span>awaiting review</span></div>
+    <div class="stat"><strong>{{ totals.rejected|default:0 }}</strong><span>rejected</span></div>
+    <div class="stat"><strong>{{ total_views }}</strong><span>total views</span></div>
+  </div>
+
+  <div class="desk-filters">
+    <a href="{% url 'news:desk' %}" class="{% if not status_filter %}is-active{% endif %}">All</a>
+    {% for value, label in statuses %}
+      <a href="?status={{ value }}" class="{% if status_filter == value %}is-active{% endif %}">{{ label }}</a>
+    {% endfor %}
+    <a class="desk-admin" href="/admin/news/article/">Open in Django admin</a>
+  </div>
+
+  {% for day, items in days %}
+    <section class="desk-day">
+      <h2>{{ day|date:"l, j F Y" }} <span>{{ items|length }} stor{{ items|length|pluralize:"y,ies" }}</span></h2>
+      <table class="desk-table">
+        <tbody>
+        {% for article in items %}
+          <tr>
+            <td class="desk-thumb">
+              {% include "news/_thumb.html" with article=article variant="mini" %}
+            </td>
+            <td class="desk-main">
+              <a class="desk-title" href="{{ article.get_absolute_url }}">{{ article.title }}</a>
+              <div class="desk-meta">
+                <span class="pill pill-{{ article.status }}">{{ article.get_status_display }}</span>
+                <span>{{ article.category.name }}</span>
+                <span>{{ article.word_count }} words</span>
+                <span>{{ article.view_count }} view{{ article.view_count|pluralize }}</span>
+                <span>overlap {{ article.max_ngram_overlap|floatformat:1 }}%</span>
+                <span>{{ article.created_at|date:"H:i" }}</span>
+                {% if not article.lead_image %}<span class="warn">no image</span>{% endif %}
+              </div>
+              {% if article.safety_flags %}
+                <div class="desk-flags">
+                  {% for flag in article.safety_flags %}
+                    <span class="flag flag-{{ flag.severity }}">{{ flag.code }}: {{ flag.detail|truncatechars:90 }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </td>
+            <td class="desk-actions">
+              <form method="post" action="{% url 'news:desk_action' article.slug %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                {% if article.status != 'published' %}
+                  <button name="action" value="publish" class="btn btn-go">Publish</button>
+                {% else %}
+                  <button name="action" value="unpublish" class="btn">Unpublish</button>
+                {% endif %}
+                <a class="btn" href="/admin/news/article/{{ article.pk }}/change/">Edit</a>
+                <button name="action" value="delete" class="btn btn-danger"
+                        onclick="return confirm('Delete “{{ article.title|escapejs }}” permanently? This also deletes its image.')">
+                  Delete
+                </button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% empty %}
+    <div class="empty">
+      <h2>Nothing produced yet</h2>
+      <p>Run the pipeline:</p>
+      <pre>python manage.py run_daily</pre>
+    </div>
+  {% endfor %}
+
+  <section class="desk-day">
+    <h2>Recent pipeline runs</h2>
+    <table class="runs">
+      <thead>
+        <tr><th>Date</th><th>Status</th><th>Target</th><th>Published</th><th>Held</th><th>Rejected</th><th>Runtime</th></tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+          <tr>
+            <td>{{ run.run_for }}</td>
+            <td class="run-{{ run.status }}">{{ run.get_status_display }}</td>
+            <td>{{ run.target_count }}</td>
+            <td>{{ run.articles_published }}</td>
+            <td>{{ run.articles_held }}</td>
+            <td>{{ run.articles_rejected }}</td>
+            <td>{% if run.duration_seconds %}{{ run.duration_seconds|floatformat:0 }}s{% else %}running{% endif %}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7">No runs recorded yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endblock %}

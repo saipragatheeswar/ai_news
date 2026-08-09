@@ -3,12 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{{ site_name }}{% endblock %}</title>
+  <title>{% block title %}{{ site_name }} — {{ site_tagline }}{% endblock %}</title>
   <meta name="description" content="{% block description %}{{ site_tagline }}{% endblock %}">
+  {% block social %}{% endblock %}
   <link rel="alternate" type="application/rss+xml" title="{{ site_name }}" href="{% url 'news:feed' %}">
   <link rel="stylesheet" href="{% static 'news/site.css' %}">
 </head>
 <body>
+  <div class="topbar">
+    <div class="wrap topbar-inner">
+      <span>{% now "l, j F Y" %}</span>
+      <span class="topbar-links">
+        {% if user.is_staff %}<a href="{% url 'news:desk' %}">Editorial desk</a>{% endif %}
+        <a href="{% url 'news:feed' %}">RSS</a>
+      </span>
+    </div>
+  </div>
+
   <header class="masthead">
     <div class="wrap masthead-inner">
       <a class="brand" href="{% url 'news:home' %}">
@@ -18,15 +29,26 @@
           <small>{{ site_tagline }}</small>
         </span>
       </a>
-      <nav class="nav">
+    </div>
+    <nav class="nav">
+      <div class="wrap nav-inner">
+        <a href="{% url 'news:home' %}" class="{% if not active_category %}is-active{% endif %}">Home</a>
         {% for category in categories %}
           <a href="{{ category.get_absolute_url }}"
              class="{% if category.slug == active_category %}is-active{% endif %}">{{ category.name }}</a>
         {% endfor %}
         <a href="{% url 'news:about' %}">How this works</a>
-      </nav>
-    </div>
+      </div>
+    </nav>
   </header>
+
+  {% if messages %}
+    <div class="wrap flash-area">
+      {% for message in messages %}
+        <div class="flash flash-{{ message.tags }}">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
 
   <main class="wrap">
     {% block content %}{% endblock %}
@@ -34,15 +56,18 @@
 
   <footer class="footer">
     <div class="wrap footer-inner">
-      <p>
-        {{ site_name }} publishes original summaries written from multiple
-        reported sources. Every story links back to the outlets that did the
-        reporting.
-      </p>
+      <div>
+        <strong>{{ site_name }}</strong>
+        <p>
+          Original summaries written from multiple reported sources by a local
+          language model, with automated checks before publication.
+        </p>
+      </div>
       <p class="footer-links">
         <a href="{% url 'news:about' %}">Editorial policy</a>
         <a href="{% url 'news:feed' %}">RSS</a>
         <a href="{% url 'news:status' %}">Pipeline status</a>
+        {% if user.is_staff %}<a href="{% url 'news:desk' %}">Desk</a>{% endif %}
       </p>
     </div>
   </footer>

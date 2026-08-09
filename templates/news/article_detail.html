@@ -1,60 +1,135 @@
 {% extends "news/base.html" %}
 
-{% block title %}{{ article.title }} - {{ site_name }}{% endblock %}
+{% block title %}{{ article.title }} — {{ site_name }}{% endblock %}
 {% block description %}{{ article.summary }}{% endblock %}
+
+{% block social %}
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="{{ article.title }}">
+  <meta property="og:description" content="{{ article.summary }}">
+  <meta property="og:url" content="{{ share.url }}">
+  {% if article.lead_image %}
+    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{{ article.lead_image.file.url }}">
+  {% endif %}
+  <meta name="twitter:card" content="summary_large_image">
+{% endblock %}
 
 {% block content %}
   {% if not article.is_live %}
     <div class="banner">
-      Preview only - this story is <strong>{{ article.get_status_display }}</strong> and is not
+      Preview only — this story is <strong>{{ article.get_status_display }}</strong> and is not
       publicly visible.
       {% if article.review_notes %}<br><span class="banner-notes">{{ article.review_notes|linebreaksbr }}</span>{% endif %}
     </div>
   {% endif %}
 
-  <article class="story">
-    <a class="card-cat" href="{{ article.category.get_absolute_url }}">{{ article.category.name }}</a>
-    <h1>{{ article.title }}</h1>
-    <p class="story-summary">{{ article.summary }}</p>
-    <div class="story-meta">
-      {% if article.published_at %}
-        <time datetime="{{ article.published_at|date:'c' }}">{{ article.published_at|date:"j M Y, H:i" }}</time>
+  <div class="layout">
+    <div class="layout-main">
+      <article class="story">
+        <a class="card-cat" href="{{ article.category.get_absolute_url }}">{{ article.category.name }}</a>
+        <h1>{{ article.title }}</h1>
+        <p class="story-summary">{{ article.summary }}</p>
+        <div class="story-meta">
+          {% if article.published_at %}
+            <time datetime="{{ article.published_at|date:'c' }}">{{ article.published_at|date:"j M Y, H:i" }}</time>
+          {% endif %}
+          <span>{{ article.reading_minutes }} min read</span>
+          <span>Written by a local language model, checked before publishing</span>
+        </div>
+
+        {% with image=article.lead_image %}
+          {% if image %}
+            <figure class="story-figure">
+              <img src="{{ image.file.url }}" alt="{{ image.alt_text }}" width="{{ image.width }}" height="{{ image.height }}">
+              <figcaption>
+                Illustrative image, not a photograph of this event.
+                {% if image.attribution %}
+                  {% if image.source_page %}<a href="{{ image.source_page }}" rel="nofollow noopener" target="_blank">{{ image.attribution }}</a>
+                  {% else %}{{ image.attribution }}{% endif %}
+                {% endif %}
+              </figcaption>
+            </figure>
+          {% endif %}
+        {% endwith %}
+
+        <div class="story-body">
+          {% for paragraph in article.paragraphs %}<p>{{ paragraph }}</p>{% endfor %}
+        </div>
+
+        <div class="share">
+          <span class="share-label">Share</span>
+          <a class="share-btn wa" href="{{ share.whatsapp }}" target="_blank" rel="noopener">WhatsApp</a>
+          <a class="share-btn x" href="{{ share.x }}" target="_blank" rel="noopener">X</a>
+          <a class="share-btn fb" href="{{ share.facebook }}" target="_blank" rel="noopener">Facebook</a>
+          <a class="share-btn li" href="{{ share.linkedin }}" target="_blank" rel="noopener">LinkedIn</a>
+          <a class="share-btn tg" href="{{ share.telegram }}" target="_blank" rel="noopener">Telegram</a>
+          <a class="share-btn em" href="{{ share.email }}">Email</a>
+          <button class="share-btn copy" type="button" data-url="{{ share.url }}">Copy link</button>
+        </div>
+
+        {% if article.attributions.all %}
+          <details class="sources">
+            <summary>Sources this summary is based on ({{ article.attributions.count }})</summary>
+            <p class="sources-note">
+              This article was written independently from the facts reported below.
+              Follow the links for the original reporting.
+            </p>
+            <ul>
+              {% for attribution in article.attributions.all %}
+                <li>
+                  <a href="{{ attribution.url }}" rel="nofollow noopener" target="_blank">
+                    {{ attribution.title|default:attribution.url }}
+                  </a>
+                  {% if attribution.domain %}<span class="domain">{{ attribution.domain }}</span>{% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          </details>
+        {% endif %}
+      </article>
+
+      {% if related %}
+        <section class="related">
+          <h2 class="section-head">More in {{ article.category.name }}</h2>
+          <div class="grid grid-two">
+            {% for article in related %}{% include "news/_card.html" %}{% endfor %}
+          </div>
+        </section>
       {% endif %}
-      <span>{{ article.word_count }} words</span>
-      <span>Written by a local language model, checked before publishing</span>
     </div>
 
-    <div class="story-body">
-      {% for paragraph in article.paragraphs %}<p>{{ paragraph }}</p>{% endfor %}
-    </div>
-
-    {% if article.attributions.all %}
-      <section class="sources">
-        <h2>Reporting this summary is based on</h2>
-        <p class="sources-note">
-          This article was written independently from the facts reported below.
-          Follow the links for the original reporting.
-        </p>
-        <ul>
-          {% for attribution in article.attributions.all %}
+    <aside class="layout-side">
+      <section class="panel">
+        <h2>Latest</h2>
+        <ul class="panel-list">
+          {% for item in latest %}
             <li>
-              <a href="{{ attribution.url }}" rel="nofollow noopener" target="_blank">
-                {{ attribution.title|default:attribution.url }}
-              </a>
-              {% if attribution.domain %}<span class="domain">{{ attribution.domain }}</span>{% endif %}
+              <a href="{{ item.get_absolute_url }}">{{ item.title }}</a>
+              <span class="panel-meta">{{ item.category.name }} · {{ item.published_at|date:"H:i" }}</span>
             </li>
           {% endfor %}
         </ul>
       </section>
-    {% endif %}
-  </article>
+    </aside>
+  </div>
 
-  {% if related %}
-    <section class="related">
-      <h2>More in {{ article.category.name }}</h2>
-      <div class="grid">
-        {% for article in related %}{% include "news/_card.html" %}{% endfor %}
-      </div>
-    </section>
-  {% endif %}
+  <script>
+    document.querySelectorAll('.share-btn.copy').forEach(function (button) {
+      button.addEventListener('click', async function () {
+        const url = button.dataset.url;
+        try {
+          if (navigator.share) {
+            await navigator.share({ title: document.title, url: url });
+            return;
+          }
+          await navigator.clipboard.writeText(url);
+        } catch (err) {
+          return;
+        }
+        const original = button.textContent;
+        button.textContent = 'Copied';
+        setTimeout(function () { button.textContent = original; }, 1500);
+      });
+    });
+  </script>
 {% endblock %}

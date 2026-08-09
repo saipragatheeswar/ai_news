@@ -378,6 +378,9 @@ def enrich_sources(search: NewsSearch, topic: Topic) -> int:
         )
         added += 1
 
+    if settings.USE_FULL_TEXT_EXTRACTION:
+        _pull_full_text(search, topic)
+
     total = topic.sources.count()
     topic.source_count = total
     topic.domain_count = len(
@@ -386,3 +389,27 @@ def enrich_sources(search: NewsSearch, topic: Topic) -> int:
     topic.save(update_fields=["source_count", "domain_count"])
     logger.debug("topic=%s enriched with %d new sources", topic.pk, added)
     return total
+
+
+def _pull_full_text(search: NewsSearch, topic: Topic) -> None:
+    """Replace thin snippets with the full article body where we can get it."""
+    thin = [
+        source
+        for source in topic.sources.all()[: settings.SOURCES_PER_TOPIC]
+        if len(source.raw_content) < 2500
+    ]
+    if not thin:
+        return
+
+    extracted = search.extract([source.url for source in thin])
+    improved = 0
+    for source in thin:
+        text = extracted.get(source.url, "")
+        if len(text) > len(source.raw_content):
+            source.raw_content = text
+            source.save(update_fields=["raw_content"])
+            improved += 1
+    if improved:
+        logger.info(
+            "topic=%s pulled full text for %d/%d sources", topic.pk, improved, len(thin)
+        )

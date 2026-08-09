@@ -4,3 +4,5 @@ requests==2.34.2
 python-dotenv==1.2.2
 python-slugify==8.0.4
 APScheduler==3.11.3
+Pillow==12.3.0
+gunicorn==23.0.0

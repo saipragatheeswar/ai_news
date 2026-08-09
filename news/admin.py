@@ -4,7 +4,15 @@ from django.contrib import admin, messages
 from django.utils import timezone
 from django.utils.html import format_html
 
-from news.models import Article, Attribution, Category, PipelineRun, Source, Topic
+from news.models import (
+    Article,
+    ArticleImage,
+    Attribution,
+    Category,
+    PipelineRun,
+    Source,
+    Topic,
+)
 
 
 @admin.register(Category)
@@ -52,6 +60,21 @@ class AttributionInline(admin.TabularInline):
     fields = ("domain", "title", "url")
 
 
+class ArticleImageInline(admin.TabularInline):
+    model = ArticleImage
+    extra = 0
+    fields = ("preview", "file", "alt_text", "credit", "licence", "source_page")
+    readonly_fields = ("preview",)
+
+    @admin.display(description="preview")
+    def preview(self, obj):
+        if not obj.file:
+            return "-"
+        return format_html(
+            '<img src="{}" style="height:60px;border-radius:4px">', obj.file.url
+        )
+
+
 @admin.register(Article)
 class ArticleAdmin(admin.ModelAdmin):
     list_display = (
@@ -59,6 +82,7 @@ class ArticleAdmin(admin.ModelAdmin):
         "category",
         "status_badge",
         "word_count",
+        "view_count",
         "originality",
         "flag_count",
         "published_at",
@@ -74,10 +98,12 @@ class ArticleAdmin(admin.ModelAdmin):
         "attempts",
         "model_name",
         "word_count",
+        "view_count",
+        "last_viewed_at",
         "created_at",
         "updated_at",
     )
-    inlines = [AttributionInline]
+    inlines = [ArticleImageInline, AttributionInline]
     actions = ["approve_and_publish", "reject", "send_back_to_review"]
     date_hierarchy = "created_at"
     fieldsets = (
@@ -105,6 +131,8 @@ class ArticleAdmin(admin.ModelAdmin):
                     "model_name",
                     "attempts",
                     "word_count",
+                    "view_count",
+                    "last_viewed_at",
                     "published_at",
                     "created_at",
                     "updated_at",
