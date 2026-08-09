@@ -8,8 +8,32 @@
     <p>
       Everything the pipeline has produced, newest first. Stories with fewer than
       {{ retention_min_views }} views are purged automatically after {{ retention_days }} days.
+      Originality threshold: up to {{ max_ngram_overlap|floatformat:0 }}% source overlap allowed
+      (no rewrite loop).
     </p>
   </div>
+
+  {% if active_run %}
+    <div class="banner">
+      <strong>Run in progress</strong> for {{ active_run.run_for|date:"j M Y" }} —
+      target {{ active_run.target_count }}, started {{ active_run.started_at|date:"H:i" }}.
+      Topics today: {{ today_topics|length }}
+      (queued {{ topic_counts.discovered|default:0 }},
+      writing {{ topic_counts.selected|default:0 }},
+      written {{ topic_counts.written|default:0 }},
+      skipped {{ topic_counts.skipped|default:0 }},
+      failed {{ topic_counts.failed|default:0 }}).
+    </div>
+  {% elif latest_run %}
+    <div class="banner">
+      Last run {{ latest_run.run_for|date:"j M Y" }}:
+      <span class="run-{{ latest_run.status }}">{{ latest_run.get_status_display }}</span>
+      — published {{ latest_run.articles_published }},
+      held {{ latest_run.articles_held }},
+      rejected {{ latest_run.articles_rejected }}
+      {% if latest_run.finished_at %}· finished {{ latest_run.finished_at|date:"H:i" }}{% endif %}.
+    </div>
+  {% endif %}
 
   <div class="stats">
     <div class="stat"><strong>{{ totals.published|default:0 }}</strong><span>published</span></div>
@@ -17,6 +41,58 @@
     <div class="stat"><strong>{{ totals.rejected|default:0 }}</strong><span>rejected</span></div>
     <div class="stat"><strong>{{ total_views }}</strong><span>total views</span></div>
   </div>
+
+  <section class="desk-day">
+    <h2>Today’s topics ({{ today|date:"j M Y" }}) <span>{{ today_topics|length }} picked</span></h2>
+    {% if today_topics %}
+      <table class="desk-table topic-board">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Topic</th>
+            <th>Beat</th>
+            <th>Heat</th>
+            <th>Status</th>
+            <th>Article / note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for topic in today_topics %}
+            {% with article=topic.articles.first %}
+            <tr>
+              <td class="desk-meta">{{ forloop.counter }}</td>
+              <td class="desk-main">
+                <span class="desk-title">{{ topic.label }}</span>
+              </td>
+              <td class="desk-meta">{{ topic.category.name }}</td>
+              <td class="desk-meta">{{ topic.heat_score|floatformat:1 }}</td>
+              <td>
+                <span class="pill pill-topic-{{ topic.status }}">{{ topic.get_status_display }}</span>
+              </td>
+              <td class="desk-meta">
+                {% if article %}
+                  <a href="{{ article.get_absolute_url }}">{{ article.title|truncatechars:55 }}</a>
+                  <span class="pill pill-{{ article.status }}">{{ article.get_status_display }}</span>
+                  <span>{{ article.word_count }}w</span>
+                {% elif topic.skip_reason %}
+                  {{ topic.skip_reason|truncatechars:90 }}
+                {% elif topic.status == "selected" %}
+                  Writing now…
+                {% elif topic.status == "discovered" %}
+                  Queued
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+            {% endwith %}
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="desk-meta">No topics discovered for today yet. They appear when a run starts.</p>
+    {% endif %}
+  </section>
 
   <div class="desk-filters">
     <a href="{% url 'news:desk' %}" class="{% if not status_filter %}is-active{% endif %}">All</a>

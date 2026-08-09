@@ -194,8 +194,17 @@ SOURCES_PER_TOPIC = env_int("SOURCES_PER_TOPIC", 5)
 MIN_SOURCES_FOR_RUMOUR = env_int("MIN_SOURCES_FOR_RUMOUR", 2)
 
 # Originality gate: reject drafts that reuse too much source wording.
-MAX_NGRAM_OVERLAP = env_float("MAX_NGRAM_OVERLAP", 0.12)
-MAX_LONGEST_COMMON_RUN = env_int("MAX_LONGEST_COMMON_RUN", 9)
+# Share of the draft's 5-grams that may also appear in a source. 0.40 means
+# "at least ~60% original phrasing" — loose enough that factual reporting does
+# not trigger rewrite loops, tight enough to catch near-copies.
+MAX_NGRAM_OVERLAP = env_float("MAX_NGRAM_OVERLAP", 0.40)
+MAX_LONGEST_COMMON_RUN = env_int("MAX_LONGEST_COMMON_RUN", 18)
+# When True, a draft that fails the originality threshold is rewritten. When
+# False (default), the score is recorded and the draft is stored once — over
+# the threshold goes to review, under it can publish.
+REWRITE_ON_ORIGINALITY_FAIL = env_bool("REWRITE_ON_ORIGINALITY_FAIL", False)
+# Extra LLM safety pass. Rule-based gates always run; this adds ~1 minute/story.
+USE_MODEL_SAFETY_REVIEW = env_bool("USE_MODEL_SAFETY_REVIEW", False)
 ORIGINALITY_NGRAM_SIZE = env_int("ORIGINALITY_NGRAM_SIZE", 5)
 
 # How many times we re-prompt the model when a gate fails.

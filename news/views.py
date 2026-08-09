@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import DetailView, ListView
 
-from news.models import Article, Category, PipelineRun
+from news.models import Article, Category, PipelineRun, Topic
 
 
 def published_articles():
@@ -173,6 +173,25 @@ def desk(request):
         row["status"]: row["n"]
         for row in Article.objects.values("status").annotate(n=Count("id"))
     }
+
+    today = timezone.localdate()
+    active_run = (
+        PipelineRun.objects.filter(status=PipelineRun.Status.RUNNING)
+        .order_by("-started_at")
+        .first()
+    )
+    latest_run = PipelineRun.objects.order_by("-started_at").first()
+    today_topics = (
+        Topic.objects.filter(discovered_for=today)
+        .select_related("category")
+        .prefetch_related("articles")
+        .order_by("-heat_score", "id")
+    )
+    topic_counts = {
+        row["status"]: row["n"]
+        for row in today_topics.values("status").annotate(n=Count("id"))
+    }
+
     return render(
         request,
         "news/desk.html",
@@ -182,10 +201,16 @@ def desk(request):
             "totals": totals,
             "total_views": Article.objects.aggregate(n=Sum("view_count"))["n"] or 0,
             "runs": PipelineRun.objects.all()[:8],
+            "active_run": active_run,
+            "latest_run": latest_run,
+            "today_topics": today_topics,
+            "topic_counts": topic_counts,
+            "today": today,
             "status_filter": status,
             "statuses": Article.Status.choices,
             "retention_days": settings.RETENTION_DAYS,
             "retention_min_views": settings.RETENTION_MIN_VIEWS,
+            "max_ngram_overlap": settings.MAX_NGRAM_OVERLAP,
         },
     )
 

@@ -240,6 +240,18 @@ main { min-height: 60vh; padding: 30px 22px 64px; }
 .pill-needs_review { background: #fff4e0; color: #a35c00; }
 .pill-rejected { background: #fce8e6; color: #c5221f; }
 .pill-draft { background: var(--bg-soft); color: var(--ink-soft); }
+.pill-topic-discovered { background: var(--bg-soft); color: var(--ink-soft); }
+.pill-topic-selected { background: #e8f0fe; color: #174ea6; }
+.pill-topic-written { background: #e6f4ea; color: #137333; }
+.pill-topic-skipped { background: #fce8e6; color: #c5221f; }
+.pill-topic-failed { background: #fce8e6; color: #c5221f; }
+
+.topic-board th {
+  font: 700 11px/1 var(--sans); text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--ink-faint); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line);
+}
+.topic-board td { font: 13.5px/1.4 var(--sans); }
+.topic-board .desk-title { font: 600 14px/1.35 var(--serif); }
 
 .desk-actions { width: 250px; text-align: right; }
 .desk-actions form { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }

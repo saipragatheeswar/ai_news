@@ -138,6 +138,9 @@ class Pipeline:
 
     def process_topic(self, topic: Topic, result: RunResult) -> Article | None:
         logger.info("writing topic #%s: %s", topic.pk, topic.label)
+        topic.status = Topic.Status.SELECTED
+        topic.skip_reason = ""
+        topic.save(update_fields=["status", "skip_reason"])
 
         topic_discovery.enrich_sources(self.search, topic)
         sources = list(topic.sources.all()[: settings.SOURCES_PER_TOPIC])
@@ -159,6 +162,7 @@ class Pipeline:
         feedback = ""
         last_report: safety.SafetyReport | None = None
         last_originality: originality.OriginalityReport | None = None
+        last_draft: rewriter.Draft | None = None
 
         for attempt in range(1, rewriter.attempt_budget() + 1):
             draft = rewriter.write_article(
@@ -168,10 +172,7 @@ class Pipeline:
                 feedback = "- Your last response was unusable. Return valid JSON."
                 continue
 
-            # Length is handled inside the writer by adding further passes, not
-            # by rewriting: a short draft needs more material, not new wording.
-            # Anything still short falls through to the safety gate, which holds
-            # it for review rather than discarding the work.
+            last_draft = draft
             if trimmed := rewriter.trim_to_maximum(draft):
                 logger.info("trimmed overlong draft to %d words", trimmed)
 
@@ -186,6 +187,9 @@ class Pipeline:
             last_originality = originality_report
             last_report = rule_report
 
+            # Hard policy blocks (adult, unattributed accusations, …) may still
+            # get one rewrite. Originality never rewrites by default — the score
+            # is recorded and the draft is stored under/over the 40% threshold.
             if rule_report.verdict == safety.Verdict.BLOCK:
                 logger.info(
                     "attempt %d blocked by rules: %s", attempt, rule_report.summary
@@ -193,7 +197,11 @@ class Pipeline:
                 feedback = rewriter.feedback_for(None, rule_report.summary)
                 continue
 
-            if not originality_report.passed:
+            if (
+                not originality_report.passed
+                and settings.REWRITE_ON_ORIGINALITY_FAIL
+                and attempt < rewriter.attempt_budget()
+            ):
                 logger.info(
                     "attempt %d too close to sources: %s",
                     attempt,
@@ -202,17 +210,47 @@ class Pipeline:
                 feedback = rewriter.feedback_for(originality_report.summary, None)
                 continue
 
-            model_report = safety.review_with_model(
-                self.model, draft.title, draft.body, category_slug=topic.category.slug
-            )
-            combined = safety.combine(rule_report, model_report)
+            if not originality_report.passed:
+                # Soft fail: keep the draft, flag it for a human if needed.
+                logger.info(
+                    "originality over threshold (keeping draft): %s",
+                    originality_report.summary,
+                )
+                rule_report.issues.append(
+                    safety.SafetyIssue(
+                        "originality",
+                        safety.Verdict.REVIEW,
+                        originality_report.summary,
+                    )
+                )
+
+            if settings.USE_MODEL_SAFETY_REVIEW:
+                model_report = safety.review_with_model(
+                    self.model,
+                    draft.title,
+                    draft.body,
+                    category_slug=topic.category.slug,
+                )
+                combined = safety.combine(rule_report, model_report)
+            else:
+                combined = rule_report
+
             article = self._store(
                 topic, draft, combined, originality_report, usable, result
             )
             self._attach_image(article, topic, fact_sheet)
             return article
 
-        # Every attempt failed a gate: keep the last draft for a human to see.
+        # Only hard blocks exhausted retries. If we still have a draft, store it
+        # for review rather than discarding the work.
+        if last_draft and last_originality and last_report:
+            if last_report.verdict != safety.Verdict.BLOCK:
+                article = self._store(
+                    topic, last_draft, last_report, last_originality, usable, result
+                )
+                self._attach_image(article, topic, fact_sheet)
+                return article
+
         reason_parts = []
         if last_report and last_report.issues:
             reason_parts.append(last_report.summary)
