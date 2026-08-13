@@ -300,6 +300,31 @@ class ClusteringTests(TestCase):
             "Something big happened today",
         )
 
+    def test_near_duplicate_spider_man_style_titles(self):
+        Category.objects.get_or_create(
+            slug="entertainment", defaults={"name": "Entertainment"}
+        )
+        cat = Category.objects.get(slug="entertainment")
+        Article.objects.create(
+            category=cat,
+            title="Spider-Man: Brand New Day Shatters Box Office Records",
+            slug="spider-man-shatters",
+            summary="s",
+            body="word " * 50,
+            status=Article.Status.PUBLISHED,
+            published_at=timezone.now(),
+        )
+        match = topics.find_similar_coverage(
+            "Spider-Man: Brand New Day Smashes Records"
+        )
+        self.assertIsNotNone(match)
+        self.assertIn("Spider-Man", match)
+        self.assertIsNone(
+            topics.find_similar_coverage(
+                "Federal Reserve holds interest rates steady in September"
+            )
+        )
+
 
 class ModelTests(TestCase):
     def test_fingerprint_ignores_word_order_and_stopwords(self):
@@ -425,8 +450,21 @@ class ViewTests(TestCase):
         self.assertEqual(self.client.get("/feed/").status_code, 200)
         self.assertEqual(self.client.get("/sitemap.xml").status_code, 200)
 
+    def test_robots_txt_points_at_sitemap(self):
+        response = self.client.get("/robots.txt")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Sitemap:", response.content)
+        self.assertIn(b"/sitemap.xml", response.content)
+
     def test_policy_page_renders(self):
         self.assertEqual(self.client.get("/about/").status_code, 200)
+
+    def test_legal_and_contact_pages_render(self):
+        for path in ("/privacy/", "/terms/", "/contact/"):
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 200, path)
+            self.assertContains(response, "MobilesHub360.com")
+            self.assertContains(response, "@")
 
     def test_status_page_requires_staff(self):
         self.assertEqual(self.client.get("/status/").status_code, 302)

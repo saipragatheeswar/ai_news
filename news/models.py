@@ -6,6 +6,7 @@ import hashlib
 import uuid
 from pathlib import Path
 
+from django.conf import settings
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
@@ -211,6 +212,13 @@ class Article(models.Model):
     @property
     def reading_minutes(self) -> int:
         return max(1, round(self.word_count / 200))
+
+    @property
+    def byline(self) -> str:
+        """Stable staff-style byline picked from the configured name list."""
+        names = getattr(settings, "ARTICLE_BYLINES", None) or ["Staff Reporter"]
+        key = self.pk or abs(hash(self.slug or self.title))
+        return names[int(key) % len(names)]
 
     def register_view(self) -> None:
         """Counted with an UPDATE so concurrent reads cannot clobber each other."""

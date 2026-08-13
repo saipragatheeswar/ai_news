@@ -1,18 +1,10 @@
-"""Find, fetch and store openly-licensed images for articles.
+"""Find, fetch and store article images.
 
-We never copy pictures from the outlets we summarise. News photography is
-normally licensed to the outlet by an agency (Reuters, AP, PTI, Getty), so the
-outlet could not grant us permission even if it wanted to, and image claims are
-the most aggressively enforced form of copyright online.
-
-Instead we search sources that publish explicit reuse licences - Openverse
-(which aggregates Creative Commons and public domain works) and Wikimedia
-Commons - download the file to our own storage, and record the licence and
-creator so the credit can be displayed with the picture.
-
-These images illustrate the subject rather than depicting the specific event, so
-they are captioned as such and never used to imply they are news photographs of
-what happened.
+Preference order:
+1. Hero/social image from a source article page (og:image / twitter:image),
+   downloaded into our own media storage (never hotlinked).
+2. Openly-licensed fallback from Openverse / Wikimedia Commons when no
+   usable source image is found.
 """
 
 from __future__ import annotations
@@ -20,7 +12,10 @@ from __future__ import annotations
 import io
 import logging
 import re
+import time
 from dataclasses import dataclass
+from html import unescape
+from urllib.parse import urljoin, urlparse
 
 import requests
 from django.conf import settings
@@ -31,12 +26,59 @@ from news.models import Article, ArticleImage
 
 logger = logging.getLogger("news.images")
 
-USER_AGENT = "PulseWireBot/1.0 (openly-licensed image fetcher)"
+USER_AGENT = (
+    "DailyNewsBot/1.0 (https://github.com/saipragatheeswar/ai_news; "
+    "article image fetcher)"
+)
 
-# Licences that permit reuse. Anything outside this set is ignored, including
-# "nd" (no derivatives) since we resize, and "nc" is kept only if the site is
-# non-commercial - so we exclude it by default to stay safe.
+# Licences that permit reuse for the open-licence fallback path.
 ALLOWED_OPENVERSE_LICENCES = {"cc0", "pdm", "by", "by-sa"}
+
+_META_IMAGE_PATTERNS = [
+    re.compile(
+        r'<meta[^>]+property=["\']og:image(?::secure_url)?["\'][^>]+content=["\']([^"\']+)["\']',
+        re.I,
+    ),
+    re.compile(
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image(?::secure_url)?["\']',
+        re.I,
+    ),
+    re.compile(
+        r'<meta[^>]+name=["\']twitter:image(?::src)?["\'][^>]+content=["\']([^"\']+)["\']',
+        re.I,
+    ),
+    re.compile(
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image(?::src)?["\']',
+        re.I,
+    ),
+]
+
+
+def _http_get(url: str, *, params: dict | None = None, stream: bool = False):
+    """GET with a short retry on rate limits."""
+    last_response: requests.Response | None = None
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        try:
+            response = requests.get(
+                url,
+                params=params,
+                headers={"User-Agent": USER_AGENT, "Accept": "*/*"},
+                timeout=settings.IMAGE_HTTP_TIMEOUT,
+                stream=stream,
+            )
+            last_response = response
+            if response.status_code in {429, 503}:
+                time.sleep(2.5 * (attempt + 1))
+                continue
+            return response
+        except requests.RequestException as exc:
+            last_exc = exc
+            time.sleep(1.5 * (attempt + 1))
+    if last_response is not None:
+        return last_response
+    assert last_exc is not None
+    raise last_exc
 
 
 @dataclass
@@ -56,12 +98,20 @@ class ImageCandidate:
         return self.provider
 
 
-def attach_image(article: Article, queries: list[str]) -> ArticleImage | None:
-    """Find and store one openly-licensed image for an article."""
+def attach_image(
+    article: Article,
+    queries: list[str],
+    source_urls: list[str] | None = None,
+) -> ArticleImage | None:
+    """Attach one image: prefer source-page heroes, then open-licence search."""
     if not settings.FETCH_IMAGES:
         return None
     if article.images.exists():
         return article.images.first()
+
+    stored = attach_image_from_sources(article, source_urls or [])
+    if stored is not None:
+        return stored
 
     for query in _usable_queries(queries):
         for finder in (_search_openverse, _search_wikimedia):
@@ -82,8 +132,92 @@ def attach_image(article: Article, queries: list[str]) -> ArticleImage | None:
                 )
                 return stored
 
-    logger.info("no openly-licensed image found for article %s", article.pk)
+    logger.info("no image found for article %s", article.pk)
     return None
+
+
+def attach_image_from_sources(
+    article: Article, source_urls: list[str]
+) -> ArticleImage | None:
+    """Download the first usable og/twitter image from source article pages."""
+    if not settings.FETCH_IMAGES:
+        return None
+    if article.images.exists():
+        return article.images.first()
+
+    for page_url in _dedupe_urls(source_urls):
+        try:
+            image_url = extract_image_url(page_url)
+        except requests.RequestException as exc:
+            logger.debug("source page fetch failed for %s: %s", page_url, exc)
+            continue
+        if not image_url:
+            continue
+
+        domain = _domain(page_url)
+        candidate = ImageCandidate(
+            url=image_url,
+            provider="Source page",
+            title=article.title,
+            creator=domain,
+            licence="Source article image",
+            source_page=page_url,
+        )
+        stored = _download_and_store(article, candidate, article.title)
+        if stored is not None:
+            logger.info(
+                "image for article %s from source %s",
+                article.pk,
+                domain,
+            )
+            return stored
+    return None
+
+
+def extract_image_url(page_url: str) -> str | None:
+    """Return absolute og:image / twitter:image URL from a source page."""
+    response = _http_get(page_url)
+    if response.status_code != 200 or not response.content:
+        return None
+
+    content_type = (response.headers.get("Content-Type") or "").lower()
+    # Some outlets serve the image URL itself; accept direct image responses.
+    if content_type.startswith("image/"):
+        return page_url
+
+    # Only need the head for meta tags; keep parse cheap.
+    html = response.text[:200_000]
+    for pattern in _META_IMAGE_PATTERNS:
+        match = pattern.search(html)
+        if not match:
+            continue
+        raw = unescape(match.group(1).strip())
+        if not raw or raw.startswith("data:"):
+            continue
+        absolute = urljoin(page_url, raw)
+        if absolute.startswith(("http://", "https://")):
+            return absolute
+    return None
+
+
+def _dedupe_urls(urls: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for url in urls:
+        text = (url or "").strip()
+        if not text.startswith(("http://", "https://")):
+            continue
+        key = text.split("#", 1)[0].rstrip("/")
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(text)
+    return ordered[:8]
+
+
+def _domain(url: str) -> str:
+    host = urlparse(url).netloc.lower()
+    return host[4:] if host.startswith("www.") else host
 
 
 def _usable_queries(queries: list[str]) -> list[str]:
@@ -102,7 +236,7 @@ def _usable_queries(queries: list[str]) -> list[str]:
 
 
 def _search_openverse(query: str) -> ImageCandidate | None:
-    response = requests.get(
+    response = _http_get(
         "https://api.openverse.org/v1/images/",
         params={
             "q": query,
@@ -111,8 +245,6 @@ def _search_openverse(query: str) -> ImageCandidate | None:
             "mature": "false",
             "page_size": 8,
         },
-        headers={"User-Agent": USER_AGENT},
-        timeout=settings.IMAGE_HTTP_TIMEOUT,
     )
     if response.status_code != 200:
         logger.debug("openverse returned %s for %r", response.status_code, query)
@@ -138,7 +270,7 @@ def _search_openverse(query: str) -> ImageCandidate | None:
 
 
 def _search_wikimedia(query: str) -> ImageCandidate | None:
-    response = requests.get(
+    response = _http_get(
         "https://commons.wikimedia.org/w/api.php",
         params={
             "action": "query",
@@ -151,8 +283,6 @@ def _search_wikimedia(query: str) -> ImageCandidate | None:
             "iiprop": "url|size|extmetadata",
             "iiurlwidth": settings.IMAGE_MAX_WIDTH,
         },
-        headers={"User-Agent": USER_AGENT},
-        timeout=settings.IMAGE_HTTP_TIMEOUT,
     )
     if response.status_code != 200:
         return None
@@ -195,19 +325,15 @@ def _download_and_store(
     article: Article, candidate: ImageCandidate, query: str
 ) -> ArticleImage | None:
     try:
-        response = requests.get(
-            candidate.url,
-            headers={"User-Agent": USER_AGENT},
-            timeout=settings.IMAGE_HTTP_TIMEOUT,
-            stream=True,
-        )
+        response = _http_get(candidate.url, stream=True)
         response.raise_for_status()
     except requests.RequestException as exc:
         logger.warning("could not download %s: %s", candidate.url, exc)
         return None
 
     content_type = (response.headers.get("Content-Type") or "").lower()
-    if not content_type.startswith("image/"):
+    # Some CDNs omit content-type; still try to decode as an image.
+    if content_type and not content_type.startswith("image/") and "octet-stream" not in content_type:
         logger.debug("skipping non-image response %s", content_type)
         return None
 

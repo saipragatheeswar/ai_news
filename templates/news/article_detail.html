@@ -53,7 +53,12 @@
         {% endwith %}
 
         <div class="story-body">
-          {% for paragraph in article.paragraphs %}<p>{{ paragraph }}</p>{% endfor %}
+          {% for paragraph in article.paragraphs %}
+            <p>{{ paragraph }}</p>
+            {% if adsense_slot_article and forloop.counter == 2 %}
+              {% include "news/_adsense.html" with slot=adsense_slot_article variant="article" %}
+            {% endif %}
+          {% endfor %}
         </div>
 
         <div class="share">

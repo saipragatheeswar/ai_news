@@ -53,6 +53,9 @@ ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]")
 
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
+# Trust nginx TLS termination so absolute URLs (sitemap, share links) use https.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -160,9 +163,55 @@ LOGGING = {
 
 # --- Publication identity -------------------------------------------------
 
-SITE_NAME = env_str("SITE_NAME", "PulseWire")
-SITE_TAGLINE = env_str("SITE_TAGLINE", "Today's hot topics, responsibly summarised")
+SITE_NAME = env_str("SITE_NAME", "Daily News")
+SITE_TAGLINE = env_str("SITE_TAGLINE", "by MobilesHub360.com")
 SITE_BASE_URL = env_str("SITE_BASE_URL", "http://127.0.0.1:8000")
+SITE_PUBLISHER = env_str("SITE_PUBLISHER", "MobilesHub360.com")
+CONTACT_EMAIL = env_str("CONTACT_EMAIL", "support@mobileshub360.com")
+PUBLISHER_COUNTRY = env_str("PUBLISHER_COUNTRY", "India")
+
+# Google AdSense. Client script is always loaded when ADSENSE_CLIENT is set.
+# Anchor + vignette (page-switch) ads are Auto ads — turn those on in AdSense.
+# Slot IDs power manual units between stories / sidebar / article body.
+ADSENSE_CLIENT = env_str("ADSENSE_CLIENT", "ca-pub-4652474325650932")
+ADSENSE_SLOT_INFEED = env_str("ADSENSE_SLOT_INFEED", "")
+ADSENSE_SLOT_SIDEBAR = env_str("ADSENSE_SLOT_SIDEBAR", "")
+ADSENSE_SLOT_ARTICLE = env_str("ADSENSE_SLOT_ARTICLE", "")
+ADSENSE_INFEED_EVERY = env_int("ADSENSE_INFEED_EVERY", 3)
+
+# Display bylines (one is chosen per article from this list).
+ARTICLE_BYLINES = [
+    "Aisha Rahman",
+    "Benjamin Cole",
+    "Priya Nair",
+    "Marcus Ellison",
+    "Hannah Brooks",
+    "Daniel Okonkwo",
+    "Sofia Alvarez",
+    "James Whitaker",
+    "Emily Zhao",
+    "Noah Patel",
+    "Olivia Grant",
+    "Liam Foster",
+    "Chloe Bennett",
+    "Ethan Morales",
+    "Isabella Cruz",
+    "Alexander Reed",
+    "Mia Thompson",
+    "Owen Harper",
+    "Ava Sinclair",
+    "Lucas Nguyen",
+    "Amelia Hughes",
+    "Henry Caldwell",
+    "Grace Kim",
+    "Samuel Ortiz",
+    "Ella Morgan",
+    "Jack Rivera",
+    "Nina Volkov",
+    "Caleb Stone",
+    "Ruby Lawson",
+    "Nathan Pierce",
+]
 
 
 # --- Content pipeline -----------------------------------------------------
@@ -182,7 +231,7 @@ OLLAMA_NUM_PREDICT = env_int("OLLAMA_NUM_PREDICT", 900)
 OLLAMA_KEEP_ALIVE = env_str("OLLAMA_KEEP_ALIVE", "30m")
 
 # How many articles a single daily run should publish.
-DAILY_ARTICLE_TARGET = env_int("DAILY_ARTICLE_TARGET", 20)
+DAILY_ARTICLE_TARGET = env_int("DAILY_ARTICLE_TARGET", 2)
 
 # Topic discovery breadth: candidates gathered before ranking.
 TOPIC_CANDIDATE_POOL = env_int("TOPIC_CANDIDATE_POOL", 60)
@@ -251,43 +300,56 @@ SCHEDULE_MINUTE = env_int("SCHEDULE_MINUTE", 30)
 # Meta queries rank roundups, live blogs and section fronts, because those pages
 # are built to rank for that phrasing. Subject queries return the individual
 # articles we actually want to write about.
+# Emphasis: US news, technology (phones, AI, launches), and sports. Other
+# beats stay present for balance but with fewer, more specific seeds.
 NEWS_CATEGORY_QUERIES = {
     "world": [
-        "government announcement international",
-        "armed conflict latest developments",
-        "national election result",
+        "United States White House announcement",
+        "US Congress bill passed",
+        "US foreign policy development",
     ],
     "india": [
         "Indian government policy decision",
         "India Supreme Court ruling",
-        "Indian state politics development",
     ],
     "business": [
-        "company quarterly earnings results",
-        "central bank interest rate decision",
-        "merger acquisition deal announced",
+        "US company quarterly earnings results",
+        "Federal Reserve interest rate decision",
+        "US merger acquisition deal announced",
+        "Wall Street stock market news",
     ],
     "technology": [
-        "artificial intelligence company launch",
-        "technology product release announced",
-        "data breach security incident",
+        "smartphone launch announced",
+        "Apple iPhone Samsung Galaxy launch",
+        "artificial intelligence product release",
+        "electric vehicle technology announcement",
+        "chip semiconductor company news",
+        "cybersecurity data breach United States",
     ],
     "sports": [
+        "NBA game result",
+        "NFL football match report",
+        "MLB baseball game result",
+        "Premier League football match report",
         "cricket match result",
-        "football match report",
-        "athletics championship result",
+        "Olympics athletics championship result",
     ],
     "entertainment": [
-        "film box office collection",
-        "movie release announcement",
-        "music album release",
+        "Bigg Boss Hindi Season 20 premiere release news",
+        "Bigg Boss Tamil 10 launch date host contestants",
+        "Bigg Boss Telugu 10 Dhasavatharam Nagarjuna",
+        "Bigg Boss Kannada 13 premiere auditions Sudeep",
+        "Bigg Boss Malayalam 8 Agnipareeksha launch",
+        "Bigg Boss Bangla Sourav Ganguly new season",
+        "Hollywood movie release announcement",
+        "US film box office collection",
     ],
     "rumours": [
+        "tech company acquisition rumours sources",
         "transfer rumours reported sources",
-        "unconfirmed report claims sources say",
     ],
     "science": [
-        "medical research study findings",
-        "space mission launch",
+        "NASA space mission launch",
+        "medical research study findings United States",
     ],
 }

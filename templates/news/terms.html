@@ -1,0 +1,79 @@
+{% extends "news/base.html" %}
+
+{% block title %}Terms of Use — {{ site_name }}{% endblock %}
+{% block description %}Terms of use for {{ site_name }} by {{ site_publisher }}.{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1>Terms of Use</h1>
+    <p>Last updated: {% now "j F Y" %}</p>
+  </div>
+
+  <div class="prose">
+    <p>
+      These terms govern your use of {{ site_name }} ({{ site_tagline }}),
+      published by <strong>{{ site_publisher }}</strong> at
+      <a href="{{ site_base_url }}">{{ site_base_url }}</a>.
+      By using the site you agree to these terms.
+    </p>
+
+    <h2>What this site is</h2>
+    <p>
+      {{ site_name }} publishes original written summaries of publicly reported
+      news topics, following the editorial rules on our
+      <a href="{% url 'news:about' %}">How this works</a> page. Content is for
+      general information only and is not professional advice.
+    </p>
+
+    <h2>Acceptable use</h2>
+    <ul>
+      <li>Do not attempt to disrupt, scrape abusively, or break into the site</li>
+      <li>Do not use the site for unlawful purposes</li>
+      <li>Do not misrepresent our articles as official statements of third parties</li>
+    </ul>
+
+    <h2>Intellectual property</h2>
+    <p>
+      The text of our summaries is published by {{ site_publisher }}. Source
+      outlets remain the owners of their own reporting and trademarks. Third-party
+      names and marks appear for identification only.
+    </p>
+
+    <h2>No warranties</h2>
+    <p>
+      News moves quickly and automated pipelines can introduce errors. We provide
+      the site “as is” without warranties of accuracy, completeness, or fitness
+      for a particular purpose. Always verify important facts with primary sources.
+    </p>
+
+    <h2>Limitation of liability</h2>
+    <p>
+      To the fullest extent permitted by law, {{ site_publisher }} is not liable
+      for any indirect, incidental, or consequential damages arising from your
+      use of the site or reliance on its content.
+    </p>
+
+    <h2>Corrections and takedown</h2>
+    <p>
+      If you believe a story is inaccurate or that content should be removed,
+      contact us at
+      <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
+      We will review requests in good faith and correct or remove material when
+      appropriate.
+    </p>
+
+    <h2>Governing law</h2>
+    <p>
+      These terms are governed by the laws of
+      {% if publisher_country %}{{ publisher_country }}{% else %}the publisher’s country of establishment{% endif %},
+      without regard to conflict-of-law rules.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      Publisher: {{ site_publisher }}{% if publisher_country %}, {{ publisher_country }}{% endif %}<br>
+      Email: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a><br>
+      More: <a href="{% url 'news:contact' %}">Contact page</a>
+    </p>
+  </div>
+{% endblock %}

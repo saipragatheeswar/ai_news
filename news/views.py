@@ -6,12 +6,28 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db.models import Count, Q, Sum
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.views.generic import DetailView, ListView
 
 from news.models import Article, Category, PipelineRun, Topic
+
+
+def robots_txt(request):
+    sitemap_url = request.build_absolute_uri("/sitemap.xml")
+    body = f"User-agent: *\nAllow: /\nDisallow: /desk/\nDisallow: /admin/\nDisallow: /status/\n\nSitemap: {sitemap_url}\n"
+    return HttpResponse(body, content_type="text/plain")
+
+
+def ads_txt(request):
+    """Publisher authorization for Google AdSense."""
+    publisher = (settings.ADSENSE_CLIENT or "").removeprefix("ca-")
+    if not publisher:
+        return HttpResponse("\n", content_type="text/plain")
+    body = f"google.com, {publisher}, DIRECT, f08c47fec0942fa0\n"
+    return HttpResponse(body, content_type="text/plain")
 
 
 def published_articles():
@@ -36,15 +52,26 @@ class HomeView(ListView):
         page = context.get("page_obj")
         articles = list(context["articles"])
 
-        # The newest story runs large, but only at the top of the first page.
+        # Newest 10 drive the lead rotator + Live box; sidebar Latest also rotates.
         on_first_page = page is None or page.number == 1
-        context["lead"] = articles[0] if on_first_page and articles else None
-        rest = articles[1:] if context["lead"] else articles
-        context["secondary"] = rest[:2]
-        context["articles"] = rest[2:]
+        if on_first_page and articles:
+            newest = articles[:10]
+            context["rotator"] = newest
+            context["live_box"] = newest
+            context["lead"] = newest[0]
+            context["secondary"] = []
+            context["articles"] = articles[10:]
+            context["latest"] = newest
+        else:
+            context["rotator"] = []
+            context["live_box"] = []
+            context["lead"] = None
+            context["secondary"] = []
+            context["articles"] = articles
+            context["latest"] = published_articles()[:10]
 
+        context["ticker"] = published_articles()[:14]
         context["categories"] = _active_categories()
-        context["latest"] = published_articles()[:8]
         context["most_read"] = (
             published_articles()
             .filter(published_at__gte=timezone.now() - timedelta(days=7))
@@ -169,6 +196,30 @@ def about(request):
             "auto_publish": settings.AUTO_PUBLISH,
             "retention_days": settings.RETENTION_DAYS,
         },
+    )
+
+
+def privacy(request):
+    return render(
+        request,
+        "news/privacy.html",
+        {"categories": _active_categories()},
+    )
+
+
+def terms(request):
+    return render(
+        request,
+        "news/terms.html",
+        {"categories": _active_categories()},
+    )
+
+
+def contact(request):
+    return render(
+        request,
+        "news/contact.html",
+        {"categories": _active_categories()},
     )
 
 

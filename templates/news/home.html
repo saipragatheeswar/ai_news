@@ -1,31 +1,91 @@
 {% extends "news/base.html" %}
 
 {% block content %}
+  {% if ticker %}
+    <div class="breaking" aria-label="Latest headlines">
+      <span class="breaking-label">Live</span>
+      <div class="breaking-track-wrap">
+        <div class="breaking-track">
+          {% for article in ticker %}
+            <a class="breaking-item" href="{{ article.get_absolute_url }}">
+              <span class="breaking-cat">{{ article.category.name }}</span>
+              {{ article.title }}
+            </a>
+          {% endfor %}
+          {% for article in ticker %}
+            <a class="breaking-item" href="{{ article.get_absolute_url }}" tabindex="-1" aria-hidden="true">
+              <span class="breaking-cat">{{ article.category.name }}</span>
+              {{ article.title }}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
   <div class="layout">
     <div class="layout-main">
-      {% if lead %}
-        <section class="featured" aria-label="Featured stories">
-          <article class="lead">
-            <a class="lead-thumb" href="{{ lead.get_absolute_url }}" tabindex="-1" aria-hidden="true">
-              {% include "news/_thumb.html" with article=lead variant="lead" %}
-            </a>
-            <div class="lead-text">
-              <a class="card-cat" href="{{ lead.category.get_absolute_url }}">{{ lead.category.name }}</a>
-              <h1><a href="{{ lead.get_absolute_url }}">{{ lead.title }}</a></h1>
-              <p class="lead-summary">{{ lead.summary }}</p>
-              <div class="card-meta">
-                <time datetime="{{ lead.published_at|date:'c' }}">{{ lead.published_at|date:"j M Y, H:i" }}</time>
-                <span>{{ lead.reading_minutes }} min read</span>
-              </div>
-            </div>
-          </article>
+      {% if rotator %}
+        <section class="featured" aria-label="Featured stories" data-rotator>
+          <div class="lead-rotator">
+            {% for article in rotator %}
+              <article class="lead rotator-slide{% if forloop.first %} is-active{% endif %}"
+                       data-slide="{{ forloop.counter0 }}"
+                       {% if not forloop.first %}aria-hidden="true"{% endif %}>
+                <a class="lead-thumb" href="{{ article.get_absolute_url }}" tabindex="-1" aria-hidden="true">
+                  {% include "news/_thumb.html" with article=article variant="lead" %}
+                </a>
+                <div class="lead-text">
+                  <a class="card-cat" href="{{ article.category.get_absolute_url }}">{{ article.category.name }}</a>
+                  <h1><a href="{{ article.get_absolute_url }}">{{ article.title }}</a></h1>
+                  <p class="lead-summary">{{ article.summary }}</p>
+                  <div class="card-meta">
+                    <time datetime="{{ article.published_at|date:'c' }}">{{ article.published_at|date:"j M Y, H:i" }}</time>
+                    <span>{{ article.reading_minutes }} min read</span>
+                  </div>
+                </div>
+              </article>
+            {% endfor %}
 
-          {% if secondary %}
-            <div class="featured-side">
-              {% for article in secondary %}
-                {% include "news/_card.html" %}
-              {% endfor %}
-            </div>
+            {% if rotator|length > 1 %}
+              <div class="rotator-controls" aria-label="Featured story controls">
+                <button type="button" class="rotator-btn" data-rotator-prev aria-label="Previous story">‹</button>
+                <div class="rotator-dots" role="tablist" aria-label="Choose featured story">
+                  {% for article in rotator %}
+                    <button type="button"
+                            class="rotator-dot{% if forloop.first %} is-active{% endif %}"
+                            data-rotator-goto="{{ forloop.counter0 }}"
+                            aria-label="Show story {{ forloop.counter }}: {{ article.title|truncatechars:60 }}"
+                            {% if forloop.first %}aria-current="true"{% endif %}></button>
+                  {% endfor %}
+                </div>
+                <button type="button" class="rotator-btn" data-rotator-next aria-label="Next story">›</button>
+              </div>
+            {% endif %}
+          </div>
+
+          {% if live_box %}
+            <aside class="live-box" data-live-box data-live-count="{{ live_box|length }}" aria-label="Live headlines">
+              <div class="live-box-head">
+                <span class="live-box-label">Live</span>
+                <span class="live-box-sub">Top 10 · showing 3</span>
+              </div>
+              <div class="live-box-list">
+                {% for article in live_box %}
+                  <a class="live-box-item{% if forloop.counter <= 3 %} is-visible{% endif %}"
+                     href="{{ article.get_absolute_url }}"
+                     data-live-index="{{ forloop.counter0 }}"
+                     {% if forloop.counter > 3 %}hidden aria-hidden="true"{% endif %}>
+                    <span class="live-box-num">{{ forloop.counter }}</span>
+                    <span class="live-box-body">
+                      <span class="live-box-cat">{{ article.category.name }}</span>
+                      <span class="live-box-title">{{ article.title }}</span>
+                      <time datetime="{{ article.published_at|date:'c' }}">{{ article.published_at|date:"H:i" }}</time>
+                    </span>
+                  </a>
+                {% endfor %}
+              </div>
+            </aside>
           {% endif %}
         </section>
       {% endif %}
@@ -35,9 +95,12 @@
         <div class="feed">
           {% for article in articles %}
             {% include "news/_feed_item.html" %}
+            {% if adsense_slot_infeed and adsense_infeed_every and forloop.counter|divisibleby:adsense_infeed_every %}
+              {% include "news/_adsense.html" with slot=adsense_slot_infeed variant="infeed" %}
+            {% endif %}
           {% endfor %}
         </div>
-      {% elif not lead %}
+      {% elif not rotator %}
         <div class="empty">
           <h2>No stories yet</h2>
           <p>Published articles will appear here as the pipeline finishes them.</p>
@@ -48,6 +111,10 @@
     </div>
 
     <aside class="layout-side">
+      {% if adsense_slot_sidebar %}
+        {% include "news/_adsense.html" with slot=adsense_slot_sidebar variant="sidebar" %}
+      {% endif %}
+
       {% if most_read %}
         <section class="panel">
           <h2>Most read</h2>
@@ -62,11 +129,13 @@
         </section>
       {% endif %}
 
-      <section class="panel">
-        <h2>Latest</h2>
+      <section class="panel" data-latest-rotate data-show="4" aria-label="Latest stories">
+        <h2>Latest <span class="panel-live-tag">updating</span></h2>
         <ul class="panel-list">
           {% for article in latest %}
-            <li>
+            <li class="latest-rotate-item{% if forloop.counter <= 4 %} is-visible{% endif %}"
+                data-latest-index="{{ forloop.counter0 }}"
+                {% if forloop.counter > 4 %}hidden aria-hidden="true"{% endif %}>
               <a href="{{ article.get_absolute_url }}">{{ article.title }}</a>
               <span class="panel-meta">{{ article.category.name }} · {{ article.published_at|date:"H:i" }}</span>
             </li>
@@ -84,4 +153,128 @@
       </section>
     </aside>
   </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Lead hero rotator
+  var root = document.querySelector("[data-rotator]");
+  if (root) {
+    var slides = Array.prototype.slice.call(root.querySelectorAll(".rotator-slide"));
+    if (slides.length > 1) {
+      var dots = Array.prototype.slice.call(root.querySelectorAll("[data-rotator-goto]"));
+      var index = 0;
+      var timer = null;
+
+      function show(next) {
+        index = (next + slides.length) % slides.length;
+        slides.forEach(function (slide, i) {
+          var on = i === index;
+          slide.classList.toggle("is-active", on);
+          slide.setAttribute("aria-hidden", on ? "false" : "true");
+        });
+        dots.forEach(function (dot, i) {
+          var on = i === index;
+          dot.classList.toggle("is-active", on);
+          if (on) dot.setAttribute("aria-current", "true");
+          else dot.removeAttribute("aria-current");
+        });
+      }
+
+      function play() {
+        if (reduce) return;
+        stop();
+        timer = window.setInterval(function () { show(index + 1); }, 5000);
+      }
+
+      function stop() {
+        if (timer) window.clearInterval(timer);
+        timer = null;
+      }
+
+      var prev = root.querySelector("[data-rotator-prev]");
+      var next = root.querySelector("[data-rotator-next]");
+      if (prev) prev.addEventListener("click", function () { show(index - 1); play(); });
+      if (next) next.addEventListener("click", function () { show(index + 1); play(); });
+      dots.forEach(function (dot) {
+        dot.addEventListener("click", function () {
+          show(Number(dot.getAttribute("data-rotator-goto")));
+          play();
+        });
+      });
+
+      root.addEventListener("mouseenter", stop);
+      root.addEventListener("mouseleave", play);
+      root.addEventListener("focusin", stop);
+      root.addEventListener("focusout", function (event) {
+        if (!root.contains(event.relatedTarget)) play();
+      });
+
+      play();
+    }
+  }
+
+  function rotateWindow(root, itemSelector, visibleCount, step) {
+    if (!root) return;
+    var items = Array.prototype.slice.call(root.querySelectorAll(itemSelector));
+    var total = items.length;
+    if (total <= visibleCount) return;
+
+    var start = 0;
+    var timer = null;
+
+    function paint() {
+      var visible = {};
+      for (var i = 0; i < visibleCount; i++) {
+        visible[(start + i) % total] = true;
+      }
+      items.forEach(function (item, i) {
+        var on = !!visible[i];
+        item.classList.toggle("is-visible", on);
+        item.hidden = !on;
+        item.setAttribute("aria-hidden", on ? "false" : "true");
+        if (on) {
+          item.classList.remove("is-enter");
+          void item.offsetWidth;
+          item.classList.add("is-enter");
+        }
+      });
+    }
+
+    function tick() {
+      start = (start + step) % total;
+      paint();
+    }
+
+    function play() {
+      if (reduce) return;
+      stop();
+      timer = window.setInterval(tick, 5000);
+    }
+
+    function stop() {
+      if (timer) window.clearInterval(timer);
+      timer = null;
+    }
+
+    root.addEventListener("mouseenter", stop);
+    root.addEventListener("mouseleave", play);
+    paint();
+    play();
+  }
+
+  // Right Live box: 10 stories, show 3, step by 3 every 5s
+  rotateWindow(document.querySelector("[data-live-box]"), "[data-live-index]", 3, 3);
+
+  // Sidebar Latest: 10 stories, show 4, step by 4 every 5s
+  var latestRoot = document.querySelector("[data-latest-rotate]");
+  var latestShow = latestRoot
+    ? Number(latestRoot.getAttribute("data-show") || 4)
+    : 4;
+  rotateWindow(latestRoot, "[data-latest-index]", latestShow, latestShow);
+})();
+</script>
 {% endblock %}

@@ -14,6 +14,9 @@
       <div class="feed">
         {% for article in articles %}
           {% include "news/_feed_item.html" %}
+          {% if adsense_slot_infeed and adsense_infeed_every and forloop.counter|divisibleby:adsense_infeed_every %}
+            {% include "news/_adsense.html" with slot=adsense_slot_infeed variant="infeed" %}
+          {% endif %}
         {% empty %}
           <div class="empty"><h2>Nothing here yet</h2><p>No published stories in this section.</p></div>
         {% endfor %}
@@ -22,6 +25,9 @@
     </div>
 
     <aside class="layout-side">
+      {% if adsense_slot_sidebar %}
+        {% include "news/_adsense.html" with slot=adsense_slot_sidebar variant="sidebar" %}
+      {% endif %}
       <section class="panel">
         <h2>Elsewhere</h2>
         <ul class="panel-list">

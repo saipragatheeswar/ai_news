@@ -5,9 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ site_name }} — {{ site_tagline }}{% endblock %}</title>
   <meta name="description" content="{% block description %}{{ site_tagline }}{% endblock %}">
+  {% if adsense_client %}
+    <meta name="google-adsense-account" content="{{ adsense_client }}">
+  {% endif %}
   {% block social %}{% endblock %}
   <link rel="alternate" type="application/rss+xml" title="{{ site_name }}" href="{% url 'news:feed' %}">
-  <link rel="stylesheet" href="{% static 'news/site.css' %}?v=4">
+  <link rel="stylesheet" href="{% static 'news/site.css' %}?v=10">
+  {% if adsense_client %}
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ adsense_client }}"
+     crossorigin="anonymous"></script>
+  {% endif %}
 </head>
 <body>
   <div class="topbar">
@@ -15,6 +22,7 @@
       <span>{% now "l, j F Y" %}</span>
       <span class="topbar-links">
         {% if user.is_staff %}<a href="{% url 'news:desk' %}">Editorial desk</a>{% endif %}
+        <a href="{% url 'news:contact' %}">Contact</a>
         <a href="{% url 'news:search' %}">Search</a>
         <a href="{% url 'news:feed' %}">RSS</a>
       </span>
@@ -71,6 +79,9 @@
       </div>
       <p class="footer-links">
         <a href="{% url 'news:about' %}">Editorial policy</a>
+        <a href="{% url 'news:privacy' %}">Privacy</a>
+        <a href="{% url 'news:terms' %}">Terms</a>
+        <a href="{% url 'news:contact' %}">Contact</a>
         <a href="{% url 'news:search' %}">Search</a>
         <a href="{% url 'news:feed' %}">RSS</a>
         {% if user.is_staff %}
@@ -80,5 +91,6 @@
       </p>
     </div>
   </footer>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

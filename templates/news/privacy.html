@@ -1,0 +1,102 @@
+{% extends "news/base.html" %}
+
+{% block title %}Privacy Policy — {{ site_name }}{% endblock %}
+{% block description %}Privacy policy for {{ site_name }} by {{ site_publisher }}.{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1>Privacy Policy</h1>
+    <p>Last updated: {% now "j F Y" %}</p>
+  </div>
+
+  <div class="prose">
+    <p>
+      {{ site_name }} ({{ site_tagline }}) is published by
+      <strong>{{ site_publisher }}</strong>. This policy explains what
+      information we collect when you visit
+      <a href="{{ site_base_url }}">{{ site_base_url }}</a>
+      and how we use it.
+    </p>
+
+    <h2>Who we are</h2>
+    <p>
+      Publisher: {{ site_publisher }}{% if publisher_country %}, {{ publisher_country }}{% endif %}.
+      Contact: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
+    </p>
+
+    <h2>Information we collect</h2>
+    <ul>
+      <li>
+        <strong>Technical data</strong> that web servers normally receive, such
+        as IP address, browser type, pages visited, and approximate time of
+        visit. This is used to operate, secure, and improve the site.
+      </li>
+      <li>
+        <strong>Search queries</strong> you type into our on-site search, which
+        are processed to return matching stories.
+      </li>
+      <li>
+        <strong>Messages you send us</strong> if you email
+        <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>
+        (your email address and the content of your message).
+      </li>
+    </ul>
+
+    <h2>Cookies and similar technologies</h2>
+    <p>
+      We may use essential cookies needed for the site to function (for example
+      staff login sessions). If we later use analytics or advertising cookies,
+      we will update this policy and, where required, ask for your consent.
+    </p>
+
+    <h2>How we use information</h2>
+    <ul>
+      <li>To publish and display news summaries</li>
+      <li>To keep the site secure and measure basic traffic</li>
+      <li>To respond to contact or correction requests</li>
+      <li>To comply with legal obligations</li>
+    </ul>
+
+    <h2>Sharing</h2>
+    <p>
+      We do not sell your personal information. We may share limited technical
+      data with hosting or infrastructure providers that help us run the site,
+      under agreements that require them to protect it. We may disclose
+      information if required by law.
+    </p>
+
+    <h2>Retention</h2>
+    <p>
+      Server logs are kept only as long as needed for security and operations.
+      Contact emails are kept as long as needed to handle your request.
+    </p>
+
+    <h2>Your rights</h2>
+    <p>
+      Depending on where you live, you may have rights to access, correct, or
+      delete personal information we hold about you. Email
+      <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>
+      and we will respond within a reasonable time.
+    </p>
+
+    <h2>Children</h2>
+    <p>
+      The site is intended for a general audience and is not directed at
+      children under 13. We do not knowingly collect personal information from
+      children.
+    </p>
+
+    <h2>Changes</h2>
+    <p>
+      We may update this policy from time to time. The “Last updated” date at
+      the top will change when we do.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      Questions about privacy:
+      <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>
+      or visit our <a href="{% url 'news:contact' %}">Contact</a> page.
+    </p>
+  </div>
+{% endblock %}

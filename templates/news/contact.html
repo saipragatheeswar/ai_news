@@ -1,0 +1,42 @@
+{% extends "news/base.html" %}
+
+{% block title %}Contact — {{ site_name }}{% endblock %}
+{% block description %}Contact {{ site_name }} by {{ site_publisher }}.{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1>Contact</h1>
+    <p>Reach the publisher of {{ site_name }}.</p>
+  </div>
+
+  <div class="prose">
+    <p>
+      <strong>{{ site_name }}</strong> {{ site_tagline }} is published by
+      <strong>{{ site_publisher }}</strong>{% if publisher_country %},
+      {{ publisher_country }}{% endif %}.
+    </p>
+
+    <h2>Email</h2>
+    <p>
+      For corrections, privacy requests, copyright concerns, or general
+      questions, email:
+    </p>
+    <p class="contact-email">
+      <a href="mailto:{{ contact_email }}?subject={{ site_name }}%20inquiry">{{ contact_email }}</a>
+    </p>
+
+    <h2>What to include</h2>
+    <ul>
+      <li>The story URL (if your message is about a specific article)</li>
+      <li>A short description of the issue or request</li>
+      <li>Your preferred reply email if different from the one you send from</li>
+    </ul>
+
+    <p>
+      Related pages:
+      <a href="{% url 'news:about' %}">Editorial policy</a>,
+      <a href="{% url 'news:privacy' %}">Privacy</a>,
+      <a href="{% url 'news:terms' %}">Terms</a>.
+    </p>
+  </div>
+{% endblock %}

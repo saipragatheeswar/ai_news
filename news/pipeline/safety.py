@@ -146,13 +146,12 @@ GENERIC_HEADLINE_PATTERNS = [
     r"\bassorted (?:news|stories|updates)\b",
 ]
 
+# Only flag clear reporter "I" voice. "we/our/us" appear constantly in
+# attributed quotes and US-focused copy, so they caused mass false holds.
 FIRST_PERSON_PATTERNS = [
-    r"\bI\b",
+    r"(?<![A-Za-z])I(?![A-Za-z])",
     r"\bI'(?:m|ve|ll|d)\b",
-    r"\b[Ww]e\b",
-    r"\b[Ww]e'(?:re|ve|ll|d)\b",
-    r"\b[Oo]ur[s]?\b",
-    r"\bus\b",
+    r"\b(?:my|mine)\b",
 ]
 
 

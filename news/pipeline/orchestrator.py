@@ -113,17 +113,9 @@ class Pipeline:
         ).select_related("category")
 
     def write_pending(self, target: int, result: RunResult) -> None:
-        published_today = Article.objects.filter(
-            status=Article.Status.PUBLISHED,
-            published_at__date=timezone.localdate(),
-        ).count()
-        if published_today >= target:
-            logger.info("target already met for today (%d articles)", published_today)
-            return
-
-        remaining = target - published_today
+        # `target` is per-run (e.g. cron every 6h with --target 2), not a daily ceiling.
         for topic in self.pending_topics().order_by("-heat_score"):
-            if result.published >= remaining:
+            if result.published >= target:
                 break
             try:
                 self.process_topic(topic, result)
@@ -141,6 +133,14 @@ class Pipeline:
         topic.status = Topic.Status.SELECTED
         topic.skip_reason = ""
         topic.save(update_fields=["status", "skip_reason"])
+
+        similar = topic_discovery.find_similar_coverage(
+            topic.label, exclude_topic_id=topic.pk
+        )
+        if similar:
+            return self._skip(
+                topic, f"near-duplicate of already covered story: {similar[:120]}", result
+            )
 
         topic_discovery.enrich_sources(self.search, topic)
         sources = list(topic.sources.all()[: settings.SOURCES_PER_TOPIC])
@@ -235,6 +235,18 @@ class Pipeline:
             else:
                 combined = rule_report
 
+            # Topic labels can differ while the model still reuses a published
+            # headline — check the draft title too before storing.
+            similar_title = topic_discovery.find_similar_coverage(
+                draft.title, exclude_topic_id=topic.pk
+            )
+            if similar_title:
+                return self._skip(
+                    topic,
+                    f"draft title near-duplicate of: {similar_title[:120]}",
+                    result,
+                )
+
             article = self._store(
                 topic, draft, combined, originality_report, usable, result
             )
@@ -245,6 +257,15 @@ class Pipeline:
         # for review rather than discarding the work.
         if last_draft and last_originality and last_report:
             if last_report.verdict != safety.Verdict.BLOCK:
+                similar_title = topic_discovery.find_similar_coverage(
+                    last_draft.title, exclude_topic_id=topic.pk
+                )
+                if similar_title:
+                    return self._skip(
+                        topic,
+                        f"draft title near-duplicate of: {similar_title[:120]}",
+                        result,
+                    )
                 article = self._store(
                     topic, last_draft, last_report, last_originality, usable, result
                 )
@@ -327,11 +348,13 @@ class Pipeline:
         if not settings.FETCH_IMAGES:
             return
         try:
+            source_urls = [s.url for s in topic.sources.all() if s.url]
             images.attach_image(
                 article,
                 images.queries_for(
                     topic.label, fact_sheet.entities, topic.category.name
                 ),
+                source_urls=source_urls,
             )
         except Exception:
             logger.exception("image lookup failed for article %s", article.pk)

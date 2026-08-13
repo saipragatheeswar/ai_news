@@ -261,7 +261,7 @@ settings you are most likely to change:
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| `DAILY_ARTICLE_TARGET` | 10 | Articles to publish per run |
+| `DAILY_ARTICLE_TARGET` | 2 | Articles to publish per run (cron: every 6h × 2) |
 | `OLLAMA_MODEL` | `llama3.2:latest` | Which local model writes |
 | `AUTO_PUBLISH` | 1 | Set to 0 to hold everything for review |
 | `MAX_NGRAM_OVERLAP` | 0.12 | Lower is stricter on originality |

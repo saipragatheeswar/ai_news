@@ -10,10 +10,16 @@ from datetime import timedelta
 from django.conf import settings
 from django.utils import timezone
 
-from news.models import Category, Source, Topic
+from news.models import Article, Category, Source, Topic
 from news.pipeline.tavily_client import NewsSearch, SearchHit
 
 logger = logging.getLogger("news.topics")
+
+# Headlines that share this fraction of keywords (overlap / smaller set) are
+# treated as the same story — stops "Spider-Man smashes records" +
+# "Spider-Man shatters records" style duplicates across runs.
+NEAR_DUPLICATE_THRESHOLD = 0.5
+NEAR_DUPLICATE_LOOKBACK_DAYS = 7
 
 _STOPWORDS = {
     "about", "after", "against", "amid", "and", "are", "back", "before", "being",
@@ -23,6 +29,12 @@ _STOPWORDS = {
     "than", "that", "the", "their", "them", "there", "these", "they", "this",
     "those", "today", "top", "update", "updates", "was", "were", "what", "when",
     "where", "which", "while", "who", "why", "will", "with", "you", "your",
+    # Shared franchise boilerplate — without these, every Bigg Boss / Big Brother
+    # season story looks like a near-duplicate of every other one.
+    "bigg", "boss", "big", "brother", "season", "host", "show", "reality",
+    "premiere", "contestant", "contestants", "edition", "language", "languages",
+    "ott", "watch", "teaser", "promo", "announced", "announcement", "returns",
+    "list", "date", "where", "need", "know", "complete", "guide", "every",
 }
 
 # Trailing outlet branding that search engines append to headlines.
@@ -161,10 +173,48 @@ def clean_headline(title: str) -> str:
 
 
 def _similarity(a: set[str], b: set[str]) -> float:
+    """Jaccard similarity — overlap/min was too loose for franchise coverage."""
     if not a or not b:
         return 0.0
     overlap = len(a & b)
-    return overlap / min(len(a), len(b))
+    return overlap / len(a | b)
+
+
+def find_similar_coverage(
+    label: str,
+    *,
+    days: int = NEAR_DUPLICATE_LOOKBACK_DAYS,
+    threshold: float = NEAR_DUPLICATE_THRESHOLD,
+    exclude_topic_id: int | None = None,
+) -> str | None:
+    """Return an existing title/label if this story was already covered recently."""
+    words = keywords_of(label)
+    if len(words) < 3:
+        return None
+
+    cutoff = timezone.localdate() - timedelta(days=days)
+
+    for title in Article.objects.filter(
+        status=Article.Status.PUBLISHED,
+        published_at__date__gte=cutoff,
+    ).values_list("title", flat=True):
+        if _similarity(words, keywords_of(title)) >= threshold:
+            return title
+
+    topic_qs = Topic.objects.filter(
+        discovered_for__gte=cutoff,
+        status__in=[
+            Topic.Status.DISCOVERED,
+            Topic.Status.SELECTED,
+            Topic.Status.WRITTEN,
+        ],
+    )
+    if exclude_topic_id:
+        topic_qs = topic_qs.exclude(pk=exclude_topic_id)
+    for existing in topic_qs.values_list("label", flat=True):
+        if _similarity(words, keywords_of(existing)) >= threshold:
+            return existing
+    return None
 
 
 def cluster_hits(
@@ -212,11 +262,13 @@ def discover(
     target: int,
     pool_size: int | None = None,
     days: int = 2,
+    category_queries: dict[str, list[str]] | None = None,
 ) -> list[Topic]:
     """Run seed queries, cluster the results, and persist the hottest topics."""
     pool_size = pool_size or settings.TOPIC_CANDIDATE_POOL
-    category_queries: dict[str, list[str]] = settings.NEWS_CATEGORY_QUERIES
-    per_query = max(6, pool_size // max(sum(len(v) for v in category_queries.values()), 1))
+    category_queries = category_queries or settings.NEWS_CATEGORY_QUERIES
+    query_count = max(sum(len(v) for v in category_queries.values()), 1)
+    per_query = max(6, pool_size // query_count)
 
     hits_by_category: dict[str, list[SearchHit]] = {}
     for category_slug, queries in category_queries.items():
@@ -284,6 +336,14 @@ def _persist(clusters: list[TopicCluster]) -> list[Topic]:
         fingerprint = Topic.build_fingerprint(cluster.label)
         if fingerprint in recent_fingerprints:
             logger.debug("skipping duplicate topic: %s", cluster.label)
+            continue
+        similar = find_similar_coverage(cluster.label)
+        if similar:
+            logger.info(
+                "skipping near-duplicate topic: %s (matches %r)",
+                cluster.label,
+                similar[:80],
+            )
             continue
         recent_fingerprints.add(fingerprint)
 
