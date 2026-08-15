@@ -300,53 +300,54 @@ SCHEDULE_MINUTE = env_int("SCHEDULE_MINUTE", 30)
 # Meta queries rank roundups, live blogs and section fronts, because those pages
 # are built to rank for that phrasing. Subject queries return the individual
 # articles we actually want to write about.
-# Emphasis: US news, technology (phones, AI, launches), and sports. Other
-# beats stay present for balance but with fewer, more specific seeds.
+# Emphasis: finance, politics, sports, tech, and device launches (phones/laptops).
 NEWS_CATEGORY_QUERIES = {
     "world": [
-        "United States White House announcement",
-        "US Congress bill passed",
-        "US foreign policy development",
+        "United States White House politics announcement",
+        "US Congress bill politics vote",
+        "US Iran foreign policy development",
+        "election politics campaign news",
     ],
     "india": [
-        "Indian government policy decision",
+        "Indian government policy politics decision",
+        "India Parliament bill politics",
         "India Supreme Court ruling",
     ],
     "business": [
+        "Wall Street stock market finance news",
+        "Federal Reserve interest rate finance decision",
         "US company quarterly earnings results",
-        "Federal Reserve interest rate decision",
         "US merger acquisition deal announced",
-        "Wall Street stock market news",
+        "banking finance sector news",
+        "S&P 500 stock market rally",
     ],
     "technology": [
         "smartphone launch announced",
         "Apple iPhone Samsung Galaxy launch",
+        "Google Pixel foldable phone launch",
+        "new laptop notebook launch announced",
+        "MacBook Windows laptop release",
+        "wearable smartwatch device launch",
         "artificial intelligence product release",
-        "electric vehicle technology announcement",
         "chip semiconductor company news",
         "cybersecurity data breach United States",
+        "mobile phone tablet device launch India",
     ],
     "sports": [
         "NBA game result",
         "NFL football match report",
-        "MLB baseball game result",
         "Premier League football match report",
-        "cricket match result",
+        "cricket match result India",
+        "Premier League transfer news",
         "Olympics athletics championship result",
     ],
     "entertainment": [
-        "Bigg Boss Hindi Season 20 premiere release news",
-        "Bigg Boss Tamil 10 launch date host contestants",
-        "Bigg Boss Telugu 10 Dhasavatharam Nagarjuna",
-        "Bigg Boss Kannada 13 premiere auditions Sudeep",
-        "Bigg Boss Malayalam 8 Agnipareeksha launch",
-        "Bigg Boss Bangla Sourav Ganguly new season",
         "Hollywood movie release announcement",
         "US film box office collection",
     ],
     "rumours": [
         "tech company acquisition rumours sources",
-        "transfer rumours reported sources",
+        "football transfer rumours reported sources",
     ],
     "science": [
         "NASA space mission launch",

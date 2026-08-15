@@ -212,6 +212,29 @@ class BodyCleaningTests(TestCase):
         cleaned = rewriter._clean_body("First para.\nSecond para.\nThird para.")
         self.assertEqual(len(cleaned.split("\n\n")), 3)
 
+    def test_restated_paragraph_block_is_dropped(self):
+        first = (
+            "The numbers behind this partnership are substantial: IBM will provide "
+            "its Cloud Pak for Private on OpenAI's Daybreak platform, while OpenAI "
+            "Codex and ChatGPT will be integrated with IBM Consulting Advantage."
+        )
+        restated = (
+            "The deal is expected to create new opportunities for developers. "
+            "The numbers behind this partnership are substantial: IBM will provide "
+            "its Cloud Pak for Private on OpenAI's Daybreak platform, while OpenAI "
+            "Codex and ChatGPT will be integrated with IBM Consulting Advantage."
+        )
+        other = (
+            "Industry experts will watch how the companies implement the new tools "
+            "across regulated industries in the coming months."
+        )
+        cleaned = rewriter._dedupe_paragraphs([first, other, restated])
+        parts = cleaned.split("\n\n")
+        self.assertEqual(len(parts), 2)
+        self.assertIn(first, cleaned)
+        self.assertIn(other, cleaned)
+        self.assertNotIn("new opportunities for developers", cleaned)
+
 
 class ClusteringTests(TestCase):
     def test_similar_headlines_cluster_together(self):

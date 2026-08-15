@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 
 from django.conf import settings
 
@@ -370,6 +371,8 @@ def _dedupe_paragraphs(paragraphs: list[str]) -> str:
         key = _dedupe_key(text)
         if key in seen:
             continue
+        if any(_paragraphs_overlap(text, existing) for existing in kept):
+            continue
         seen.add(key)
         kept.append(text)
     return "\n\n".join(kept).strip()
@@ -378,6 +381,32 @@ def _dedupe_paragraphs(paragraphs: list[str]) -> str:
 def _dedupe_key(text: str) -> str:
     words = re.findall(r"[a-z0-9]+", text.lower())
     return " ".join(words[:12])
+
+
+def _paragraphs_overlap(left: str, right: str) -> bool:
+    """True when two paragraphs mostly restate the same material."""
+    a = left.lower().strip()
+    b = right.lower().strip()
+    if not a or not b:
+        return False
+    if SequenceMatcher(None, a, b).ratio() >= 0.48:
+        return True
+
+    aw = re.findall(r"[a-z0-9]+", a)
+    bw = re.findall(r"[a-z0-9]+", b)
+    if len(aw) < 12 or len(bw) < 12:
+        return False
+
+    # Shared 8-grams catch copy that starts differently but repeats a block.
+    a_grams = {" ".join(aw[i : i + 8]) for i in range(len(aw) - 7)}
+    b_grams = {" ".join(bw[i : i + 8]) for i in range(len(bw) - 7)}
+    shared = len(a_grams & b_grams)
+    smaller = min(len(a_grams), len(b_grams)) or 1
+    if shared >= 3 and shared / smaller >= 0.30:
+        return True
+
+    jaccard = len(set(aw) & set(bw)) / len(set(aw) | set(bw))
+    return jaccard >= 0.62
 
 
 def _clean_list(value, limit: int = 20, max_len: int = 400) -> list[str]:
